@@ -131,7 +131,9 @@ def get_next_workday(date_str):
     return d.strftime('%Y-%m-%d')
 
 def get_db_connection():
-    db_path = os.path.join(os.getcwd(), 'yemekhane.db')
+    # app.py dosyasının bulunduğu klasörün tam yolunu (absolute path) alır
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    db_path = os.path.join(BASE_DIR, 'yemekhane.db')
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
@@ -218,7 +220,7 @@ def init_db():
     except: pass
     try: c.execute("ALTER TABLE personeller ADD COLUMN izin_hakki INTEGER DEFAULT 14")
     except: pass
-    
+
     try: c.execute("ALTER TABLE receteler ADD COLUMN birim TEXT DEFAULT 'Gr'")
     except: pass
 
@@ -830,23 +832,23 @@ def uretim():
             conn.commit()
         elif islem == 'gun_sonu': conn.execute("UPDATE uretim SET gerceklesen_kisi=?, durum='Dağıtıldı' WHERE id=?", (request.form['gerceklesen'], request.form['uretim_id'])); conn.commit(); flash("Yemek dağıtıldı olarak işaretlendi.", "success")
         elif islem == 'gun_sonu_iptal': conn.execute("UPDATE uretim SET gerceklesen_kisi=0, durum='Üretimde' WHERE id=?", (request.form['uretim_id'],)); conn.commit()
-        elif islem == 'recete_ekle': 
+        elif islem == 'recete_ekle':
             conn.execute('INSERT INTO receteler (yemek_adi, malzeme_adi, miktar, birim) VALUES (?,?,?,?)', (request.form['yemek_adi'], request.form['malzeme_adi'], float(request.form['miktar_gram']), request.form.get('birim', 'Gr')))
             conn.commit()
-        elif islem == 'recete_sil': 
+        elif islem == 'recete_sil':
             conn.execute('DELETE FROM receteler WHERE id=?', (request.form['recete_id'],))
             conn.commit()
-            
+
         elif islem == 'recete_arsiv_ekle':
             conn.execute('INSERT INTO receteler (yemek_adi, malzeme_adi, miktar, birim) VALUES (?,?,?,?)', (request.form['yemek_adi'].title(), request.form['malzeme_adi'], float(request.form['miktar_gram']), request.form.get('birim', 'Gr')))
             conn.commit()
             flash(f"Reçete arşivi güncellendi.", "success")
-            
+
         elif islem == 'recete_arsiv_sil':
             conn.execute('DELETE FROM receteler WHERE id=?', (request.form['recete_id'],))
             conn.commit()
             flash("Malzeme reçeteden çıkarıldı.", "success")
-            
+
         return redirect(url_for('uretim', tarih=m_tarih, ogun=m_ogun))
 
     tarih = request.args.get('tarih', bugun)
@@ -912,7 +914,7 @@ def uretim():
         if kalan > 0.05:
             mutfak_deposu.append({'malzeme_adi': malz, 'mutfak_miktar': kalan, 'birim': m['birim']})
     # --------------------------------------------
-    
+
     # REÇETE ARŞİVİNİ ÇEK VE GRUPLA
     receteler_ham = conn.execute("SELECT id, yemek_adi, malzeme_adi, miktar, birim FROM receteler ORDER BY yemek_adi ASC").fetchall()
     recete_arsivi = {}
@@ -949,20 +951,20 @@ def kumanya():
     conn = get_db_connection()
     if request.method == 'POST':
         islem = request.form.get('islem_tipi')
-        
+
         if islem == 'kumanya_planla':
             tarih = request.form['tarih']; kulup = request.form['kulup_adi']; kisi = int(request.form['kisi_sayisi']); tip = request.form['kumanya_tipi']
             conn.execute("INSERT INTO kumanya (tarih, kulup_adi, kisi_sayisi, kumanya_tipi, icerik_detay, durum) VALUES (?,?,?,?,?,?)", (tarih, kulup, kisi, tip, "Reçete Bekliyor...", "Planlandı"))
             conn.execute("INSERT INTO ajanda (tarih, not_icerik, renk_kodu, url) VALUES (?,?,?,?)", (tarih, f"🎒 PLAN: {kulup} ({kisi} Kişi - {tip})", '#eab308', '/kumanya'))
             conn.commit(); flash("Kumanya planlandı.", "success")
-            
+
         elif islem == 'kumanya_recete_ekle':
             k_id = request.form['kumanya_id']
             k = conn.execute("SELECT * FROM kumanya WHERE id=?", (k_id,)).fetchone()
-            
+
             # YENİ KOD: Kullanıcının onay kutusuna girdiği nihai kişi sayısını alıyoruz
             kisi = int(request.form.get('uretim_kisi_sayisi', k['kisi_sayisi']))
-            
+
             kutu_ozetleri = []
             dusulecek_malzemeler = []
             stok_yeterli = True
@@ -974,7 +976,7 @@ def kumanya():
                     malzemeler = request.form.getlist(f'malzeme_{k_id}_{i}[]')
                     miktarlar = request.form.getlist(f'miktar_{k_id}_{i}[]')
                     kutu_malzeme_ozeti = []
-                    
+
                     for m_idx, malzeme in enumerate(malzemeler):
                         if malzeme and m_idx < len(miktarlar) and miktarlar[m_idx]:
                             try:
@@ -983,7 +985,7 @@ def kumanya():
                                 if mevcut:
                                     oran = 1000 if mevcut['birim'].upper() in ['KG', 'LT'] else 1
                                     toplam_dusulecek = round((form_mik * kisi) / oran, 2)
-                                    
+
                                     # 🚨 STOK KONTROLÜ
                                     if mevcut['miktar'] < toplam_dusulecek - 0.05:
                                         stok_yeterli = False
@@ -996,12 +998,12 @@ def kumanya():
                                     stok_yeterli = False
                                     hata_mesajlari.append(f"'{malzeme}' depoda bulunamadı!")
                             except ValueError: pass
-                            
+
                     if kutu_malzeme_ozeti:
                         kutu_ozetleri.append(f"<strong class='text-gray-800'>{kutu_adi}</strong> <span class='text-gray-500 text-xs block mb-2'>↳ {', '.join(kutu_malzeme_ozeti)}</span>")
                     else:
                         kutu_ozetleri.append(f"<strong class='text-gray-800'>{kutu_adi}</strong> (İçerik Girilmedi)<br>")
-            
+
             # 🚨 EĞER STOK YETMİYORSA İŞLEMİ İPTAL ET
             if not stok_yeterli:
                 flash(f"STOK YETERSİZ! İşlem iptal edildi. Eksikler: {', '.join(hata_mesajlari)}", "error")
@@ -1013,9 +1015,9 @@ def kumanya():
                     conn.execute("UPDATE depo SET miktar = miktar - ? WHERE id=?", (dm['miktar'], dm['id']))
                     conn.execute("INSERT INTO depo_cikis (tarih, ogun, yemek_adi, malzeme_adi, miktar, birim, onay_durumu, aciklama) VALUES (?,?,?,?,?,?,'Onaylandı',?)",
                                  (k['tarih'], 'Kumanya', k['kulup_adi'], dm['adi'], dm['miktar'], dm['birim'], "Kumanya Otomatik Çıkış"))
-                
+
                 icerik_str = "".join(kutu_ozetleri) if kutu_ozetleri else "İçerik Belirtilmedi"
-                
+
                 # YENİ KOD: Nihai (üretilen) kişi sayısını da veritabanında güncelliyoruz ki fiili sayı tutsun
                 conn.execute("UPDATE kumanya SET icerik_detay=?, durum='Hazırlanıyor', kisi_sayisi=? WHERE id=?", (icerik_str, kisi, k_id))
                 conn.commit(); flash(f"Reçete onaylandı! Toplam {kisi} kişilik malzeme DEPODAN DÜŞÜLDÜ.", "success")
@@ -1034,13 +1036,13 @@ def kumanya():
             if k: conn.execute("DELETE FROM ajanda WHERE not_icerik=?", (f"🎒 PLAN: {k['kulup_adi']} ({k['kisi_sayisi']} Kişi - {k['kumanya_tipi']})",))
             conn.execute("DELETE FROM kumanya WHERE id=?", (k_id,)); conn.execute("DELETE FROM kumanya_malzemeler WHERE kumanya_id=?", (k_id,)); conn.commit()
             flash("Plan iptal edildi.", "success")
-            
+
         return redirect(url_for('kumanya', tarih=request.form.get('tarih')))
 
     secilen_tarih = request.args.get('tarih', date.today().strftime('%Y-%m-%d'))
     gelecek_planlar = conn.execute("SELECT * FROM kumanya WHERE tarih > ? ORDER BY tarih ASC", (date.today().strftime('%Y-%m-%d'),)).fetchall()
     gunun_kumanyalari = conn.execute("SELECT * FROM kumanya WHERE tarih=? ORDER BY id DESC", (secilen_tarih,)).fetchall()
-    
+
     cikislar_db = conn.execute('SELECT malzeme_adi, SUM(miktar) as toplam_cikan FROM depo_cikis WHERE tarih=? AND ogun="Kumanya" GROUP BY malzeme_adi', (secilen_tarih,)).fetchall()
     gercek_cikislar = {c['malzeme_adi']: c['toplam_cikan'] for c in cikislar_db}
     gunluk_ihtiyac = {}
@@ -1049,7 +1051,7 @@ def kumanya():
             adi = m['malzeme_adi']
             if adi not in gunluk_ihtiyac: gunluk_ihtiyac[adi] = {'gereken': 0, 'cikan': gercek_cikislar.get(adi, 0), 'birim': m['birim']}
             gunluk_ihtiyac[adi]['gereken'] += m['miktar']
-            
+
     depo_urunler = conn.execute("SELECT urun_adi FROM depo ORDER BY urun_adi").fetchall(); conn.close()
     return render_template('kumanya.html', planlar=gelecek_planlar, kumanyalar=gunun_kumanyalari, depo_urunler=depo_urunler, secilen_tarih=secilen_tarih, gunluk_ihtiyac=gunluk_ihtiyac)
 
@@ -1563,10 +1565,10 @@ def personel():
 
         elif islem == 'izin_ekle':
             p_id = request.form['personel_id']; bas = request.form['baslangic']; bit = request.form['bitis']; tur = request.form['izin_turu']; notlar = request.form['aciklama']
-            
+
             # 🔥 SİSTEM KALKANI: İzin Çakışma Kontrolü
             cakisma = conn.execute("SELECT id FROM personel_izinler WHERE personel_id=? AND baslangic_tarihi <= ? AND bitis_tarihi >= ?", (p_id, bit, bas)).fetchone()
-            
+
             if cakisma:
                 flash("HATA: Bu personel seçilen tarihlerde zaten izinde! Lütfen mükerrer işlem yapmayın.", "error")
             else:
@@ -1587,7 +1589,7 @@ def personel():
             conn.execute("DELETE FROM personel_izinler WHERE id=?", (izin_id,))
             conn.commit()
             flash("Hatalı izin kaydı sistemden tamamen silindi.", "success")
-            
+
         elif islem == 'izin_hakki_guncelle':
             p_id = request.form['personel_id']
             yeni_hak = request.form['izin_hakki']
@@ -1603,7 +1605,7 @@ def personel():
     personeller_raw = conn.execute("SELECT * FROM personeller WHERE durum='Aktif' ORDER BY ad_soyad").fetchall()
     personeller = []
     from datetime import datetime
-    
+
     for p in personeller_raw:
         p_dict = dict(p)
         izinler_p = conn.execute("SELECT baslangic_tarihi, bitis_tarihi FROM personel_izinler WHERE personel_id=? AND izin_turu='Yıllık İzin'", (p['id'],)).fetchall()
@@ -1614,7 +1616,7 @@ def personel():
                 e = datetime.strptime(iz['bitis_tarihi'], '%Y-%m-%d')
                 if e >= b: kullanilan += (e - b).days + 1
             except: pass
-        
+
         p_dict['kullanilan_izin'] = kullanilan
         p_dict['izin_hakki'] = p['izin_hakki'] if 'izin_hakki' in p.keys() else 14
         p_dict['kalan_izin'] = p_dict['izin_hakki'] - kullanilan
