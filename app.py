@@ -53,7 +53,8 @@ def inject_notifications():
         if not bugun_kisi:
             bildirimler.append({'mesaj': "📊 Veri Girişi: Bugünün öğle yemeği sayıları henüz girilmedi!", 'url': '/uretim', 'renk': 'text-rose-600 bg-rose-50 border border-rose-200'})
 
-    ajanda_notlari_raw = conn.execute("SELECT * FROM ajanda").fetchall()
+    # İzin bildirimlerini sağ üstteki zilden (bildirimlerden) gizle
+    ajanda_notlari_raw = conn.execute("SELECT * FROM ajanda WHERE not_icerik NOT LIKE '%İZİNLİ:%'").fetchall()
 
     tamamlanlar_db = conn.execute("SELECT ajanda_id, tarih FROM ajanda_tamamlananlar WHERE tarih=?", (bugun_str,)).fetchall()
     biten_set = {str(t['ajanda_id']) for t in tamamlanlar_db}
@@ -295,7 +296,8 @@ def ajanda():
         for t_tarih, t_isim in sabit_tatiller:
             events.append({'id': f"tatil_{t_tarih}", 'title': t_isim, 'start': t_tarih, 'color': '#f43f5e', 'display': 'block'})
 
-    ajanda_notlari_raw = conn.execute('SELECT * FROM ajanda').fetchall()
+    # İzin notlarını takvimden filtreleyerek (gizleyerek) çek
+    ajanda_notlari_raw = conn.execute("SELECT * FROM ajanda WHERE not_icerik NOT LIKE '%İZİNLİ:%'").fetchall()
 
     tamamlanlar_db = conn.execute("SELECT ajanda_id, tarih FROM ajanda_tamamlananlar").fetchall()
     biten_set = {f"{t['ajanda_id']}_{t['tarih']}" for t in tamamlanlar_db}
@@ -940,7 +942,6 @@ def denetim():
         return redirect(url_for('denetim', tarih=tarih))
     kayit = conn.execute("SELECT * FROM gunluk_denetim WHERE tarih=?", (secilen_tarih,)).fetchone(); conn.close()
     return render_template('denetim.html', kayit=kayit, secilen_tarih=secilen_tarih)
-
 @app.route('/kumanya', methods=['GET', 'POST'])
 @login_required
 @admin_required
@@ -948,58 +949,98 @@ def kumanya():
     conn = get_db_connection()
     if request.method == 'POST':
         islem = request.form.get('islem_tipi')
+        
         if islem == 'kumanya_planla':
             tarih = request.form['tarih']; kulup = request.form['kulup_adi']; kisi = int(request.form['kisi_sayisi']); tip = request.form['kumanya_tipi']
             conn.execute("INSERT INTO kumanya (tarih, kulup_adi, kisi_sayisi, kumanya_tipi, icerik_detay, durum) VALUES (?,?,?,?,?,?)", (tarih, kulup, kisi, tip, "Reçete Bekliyor...", "Planlandı"))
             conn.execute("INSERT INTO ajanda (tarih, not_icerik, renk_kodu, url) VALUES (?,?,?,?)", (tarih, f"🎒 PLAN: {kulup} ({kisi} Kişi - {tip})", '#eab308', '/kumanya'))
             conn.commit(); flash("Kumanya planlandı.", "success")
+            
         elif islem == 'kumanya_recete_ekle':
             k_id = request.form['kumanya_id']
-            kisi = conn.execute("SELECT kisi_sayisi FROM kumanya WHERE id=?", (k_id,)).fetchone()['kisi_sayisi']
-            conn.execute("DELETE FROM kumanya_malzemeler WHERE kumanya_id=?", (k_id,))
+            k = conn.execute("SELECT * FROM kumanya WHERE id=?", (k_id,)).fetchone()
+            
+            # YENİ KOD: Kullanıcının onay kutusuna girdiği nihai kişi sayısını alıyoruz
+            kisi = int(request.form.get('uretim_kisi_sayisi', k['kisi_sayisi']))
+            
             kutu_ozetleri = []
-            for i in range(1, 6):
+            dusulecek_malzemeler = []
+            stok_yeterli = True
+            hata_mesajlari = []
+
+            for i in range(1, 21):
                 kutu_adi = request.form.get(f'kutu_adi_{k_id}_{i}')
                 if kutu_adi and kutu_adi.strip():
-                    malzemeler = request.form.getlist(f'malzeme_{k_id}_{i}[]'); miktarlar = request.form.getlist(f'miktar_{k_id}_{i}[]'); kutu_malzeme_ozeti = []
+                    malzemeler = request.form.getlist(f'malzeme_{k_id}_{i}[]')
+                    miktarlar = request.form.getlist(f'miktar_{k_id}_{i}[]')
+                    kutu_malzeme_ozeti = []
+                    
                     for m_idx, malzeme in enumerate(malzemeler):
                         if malzeme and m_idx < len(miktarlar) and miktarlar[m_idx]:
                             try:
                                 form_mik = float(miktarlar[m_idx])
-                                mevcut = conn.execute("SELECT id, birim FROM depo WHERE urun_adi COLLATE NOCASE = ?", (malzeme,)).fetchone()
+                                mevcut = conn.execute("SELECT id, miktar, birim FROM depo WHERE urun_adi COLLATE NOCASE = ?", (malzeme,)).fetchone()
                                 if mevcut:
                                     oran = 1000 if mevcut['birim'].upper() in ['KG', 'LT'] else 1
                                     toplam_dusulecek = round((form_mik * kisi) / oran, 2)
-                                    conn.execute("INSERT INTO kumanya_malzemeler (kumanya_id, malzeme_adi, miktar, birim) VALUES (?,?,?,?)", (k_id, malzeme, toplam_dusulecek, mevcut['birim']))
-                                    td_str = int(toplam_dusulecek) if toplam_dusulecek.is_integer() else toplam_dusulecek
-                                    kutu_malzeme_ozeti.append(f"{malzeme} ({td_str} {mevcut['birim']})")
+                                    
+                                    # 🚨 STOK KONTROLÜ
+                                    if mevcut['miktar'] < toplam_dusulecek - 0.05:
+                                        stok_yeterli = False
+                                        hata_mesajlari.append(f"{malzeme} (Gereken: {toplam_dusulecek} {mevcut['birim']}, Depo: {mevcut['miktar']} {mevcut['birim']})")
+                                    else:
+                                        dusulecek_malzemeler.append({'id': mevcut['id'], 'adi': malzeme, 'miktar': toplam_dusulecek, 'birim': mevcut['birim']})
+                                        td_str = int(toplam_dusulecek) if toplam_dusulecek.is_integer() else toplam_dusulecek
+                                        kutu_malzeme_ozeti.append(f"{malzeme} ({td_str} {mevcut['birim']})")
+                                else:
+                                    stok_yeterli = False
+                                    hata_mesajlari.append(f"'{malzeme}' depoda bulunamadı!")
                             except ValueError: pass
-                    if kutu_malzeme_ozeti: kutu_ozetleri.append(f"<strong class='text-gray-800'>{kutu_adi}</strong> <span class='text-gray-500 text-xs block mb-2'>↳ {', '.join(kutu_malzeme_ozeti)}</span>")
-                    else: kutu_ozetleri.append(f"<strong class='text-gray-800'>{kutu_adi}</strong> (İçerik Girilmedi)<br>")
-            conn.execute("UPDATE kumanya SET icerik_detay=?, durum='Hazırlanacak' WHERE id=?", ("".join(kutu_ozetleri) if kutu_ozetleri else "İçerik Belirtilmedi", k_id))
-            conn.commit(); flash("Kumanya reçetesi oluşturuldu.", "success")
-        elif islem == 'durum_guncelle':
-            yeni_durum = request.form['yeni_durum']; k_id = request.form['kumanya_id']
-            if yeni_durum in ['Hazırlandı', 'Teslim Edildi']:
-                k = conn.execute("SELECT * FROM kumanya WHERE id=?", (k_id,)).fetchone()
-                malzemeler = conn.execute("SELECT * FROM kumanya_malzemeler WHERE kumanya_id=?", (k_id,)).fetchall()
-                yeterli = True; hata = []
-                for m in malzemeler:
-                    cikan = conn.execute('SELECT SUM(miktar) as c FROM depo_cikis WHERE tarih=? AND ogun="Kumanya" AND malzeme_adi COLLATE NOCASE = ?', (k['tarih'], m['malzeme_adi'])).fetchone()['c'] or 0
-                    if cikan < m['miktar'] - 0.05: yeterli = False; hata.append(m['malzeme_adi'])
-                if not yeterli: flash(f"HATA: {', '.join(hata)} eksik çıkılmış!", "error")
-                else: conn.execute("UPDATE kumanya SET durum=? WHERE id=?", (yeni_durum, k_id)); conn.commit()
-            else: conn.execute("UPDATE kumanya SET durum=? WHERE id=?", (yeni_durum, k_id)); conn.commit()
+                            
+                    if kutu_malzeme_ozeti:
+                        kutu_ozetleri.append(f"<strong class='text-gray-800'>{kutu_adi}</strong> <span class='text-gray-500 text-xs block mb-2'>↳ {', '.join(kutu_malzeme_ozeti)}</span>")
+                    else:
+                        kutu_ozetleri.append(f"<strong class='text-gray-800'>{kutu_adi}</strong> (İçerik Girilmedi)<br>")
+            
+            # 🚨 EĞER STOK YETMİYORSA İŞLEMİ İPTAL ET
+            if not stok_yeterli:
+                flash(f"STOK YETERSİZ! İşlem iptal edildi. Eksikler: {', '.join(hata_mesajlari)}", "error")
+            else:
+                # STOK YETERLİYSE DEPODAN DÜŞ VE LOGLA
+                conn.execute("DELETE FROM kumanya_malzemeler WHERE kumanya_id=?", (k_id,))
+                for dm in dusulecek_malzemeler:
+                    conn.execute("INSERT INTO kumanya_malzemeler (kumanya_id, malzeme_adi, miktar, birim) VALUES (?,?,?,?)", (k_id, dm['adi'], dm['miktar'], dm['birim']))
+                    conn.execute("UPDATE depo SET miktar = miktar - ? WHERE id=?", (dm['miktar'], dm['id']))
+                    conn.execute("INSERT INTO depo_cikis (tarih, ogun, yemek_adi, malzeme_adi, miktar, birim, onay_durumu, aciklama) VALUES (?,?,?,?,?,?,'Onaylandı',?)",
+                                 (k['tarih'], 'Kumanya', k['kulup_adi'], dm['adi'], dm['miktar'], dm['birim'], "Kumanya Otomatik Çıkış"))
+                
+                icerik_str = "".join(kutu_ozetleri) if kutu_ozetleri else "İçerik Belirtilmedi"
+                
+                # YENİ KOD: Nihai (üretilen) kişi sayısını da veritabanında güncelliyoruz ki fiili sayı tutsun
+                conn.execute("UPDATE kumanya SET icerik_detay=?, durum='Hazırlanıyor', kisi_sayisi=? WHERE id=?", (icerik_str, kisi, k_id))
+                conn.commit(); flash(f"Reçete onaylandı! Toplam {kisi} kişilik malzeme DEPODAN DÜŞÜLDÜ.", "success")
+
+        elif islem == 'kumanya_durum_tamamla':
+            conn.execute("UPDATE kumanya SET durum='Teslim Bekliyor' WHERE id=?", (request.form['kumanya_id'],))
+            conn.commit(); flash("Kumanya mutfakta hazırlandı, teslimat bekliyor.", "success")
+
+        elif islem == 'kumanya_teslim_et':
+            conn.execute("UPDATE kumanya SET durum='Teslim Edildi' WHERE id=?", (request.form['kumanya_id'],))
+            conn.commit(); flash("Kumanya başarıyla teslim edildi.", "success")
+
         elif islem == 'kumanya_sil':
             k_id = request.form['kumanya_id']
             k = conn.execute("SELECT * FROM kumanya WHERE id=?", (k_id,)).fetchone()
             if k: conn.execute("DELETE FROM ajanda WHERE not_icerik=?", (f"🎒 PLAN: {k['kulup_adi']} ({k['kisi_sayisi']} Kişi - {k['kumanya_tipi']})",))
             conn.execute("DELETE FROM kumanya WHERE id=?", (k_id,)); conn.execute("DELETE FROM kumanya_malzemeler WHERE kumanya_id=?", (k_id,)); conn.commit()
+            flash("Plan iptal edildi.", "success")
+            
         return redirect(url_for('kumanya', tarih=request.form.get('tarih')))
 
     secilen_tarih = request.args.get('tarih', date.today().strftime('%Y-%m-%d'))
-    gelecek_planlar = conn.execute("SELECT * FROM kumanya WHERE tarih >= ? ORDER BY tarih ASC", (date.today().strftime('%Y-%m-%d'),)).fetchall()
+    gelecek_planlar = conn.execute("SELECT * FROM kumanya WHERE tarih > ? ORDER BY tarih ASC", (date.today().strftime('%Y-%m-%d'),)).fetchall()
     gunun_kumanyalari = conn.execute("SELECT * FROM kumanya WHERE tarih=? ORDER BY id DESC", (secilen_tarih,)).fetchall()
+    
     cikislar_db = conn.execute('SELECT malzeme_adi, SUM(miktar) as toplam_cikan FROM depo_cikis WHERE tarih=? AND ogun="Kumanya" GROUP BY malzeme_adi', (secilen_tarih,)).fetchall()
     gercek_cikislar = {c['malzeme_adi']: c['toplam_cikan'] for c in cikislar_db}
     gunluk_ihtiyac = {}
@@ -1008,9 +1049,9 @@ def kumanya():
             adi = m['malzeme_adi']
             if adi not in gunluk_ihtiyac: gunluk_ihtiyac[adi] = {'gereken': 0, 'cikan': gercek_cikislar.get(adi, 0), 'birim': m['birim']}
             gunluk_ihtiyac[adi]['gereken'] += m['miktar']
+            
     depo_urunler = conn.execute("SELECT urun_adi FROM depo ORDER BY urun_adi").fetchall(); conn.close()
     return render_template('kumanya.html', planlar=gelecek_planlar, kumanyalar=gunun_kumanyalari, depo_urunler=depo_urunler, secilen_tarih=secilen_tarih, gunluk_ihtiyac=gunluk_ihtiyac)
-
 
 @app.route('/satis', methods=['GET', 'POST'])
 @login_required
@@ -1530,8 +1571,6 @@ def personel():
                 flash("HATA: Bu personel seçilen tarihlerde zaten izinde! Lütfen mükerrer işlem yapmayın.", "error")
             else:
                 conn.execute("INSERT INTO personel_izinler (personel_id, baslangic_tarihi, bitis_tarihi, izin_turu, aciklama) VALUES (?,?,?,?,?)", (p_id, bas, bit, tur, notlar))
-                p = conn.execute("SELECT ad_soyad FROM personeller WHERE id=?", (p_id,)).fetchone()
-                conn.execute("INSERT INTO ajanda (tarih, not_icerik, renk_kodu, url) VALUES (?,?,?,?)", (bas, f"🏖️ İZİNLİ: {p['ad_soyad']} ({tur} Başlangıcı)", '#db2777', '/personel'))
                 conn.commit(); flash("İzin başarıyla sisteme işlendi.", "success")
 
         elif islem == 'izin_erken_bitir':

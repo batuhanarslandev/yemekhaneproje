@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <title>Yemekhane | Kumanya Planlama & Üretim</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px;}
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px;}
+    </style>
     <script>
         function openTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
@@ -13,20 +18,61 @@
             localStorage.setItem('kumanyaSekme', tabName);
         }
         document.addEventListener("DOMContentLoaded", () => openTab(localStorage.getItem('kumanyaSekme') || 'tab-planlama'));
+
+        function toggleReceteForm(id) {
+            const form = document.getElementById('recete_form_' + id);
+            if (form.classList.contains('hidden')) {
+                form.classList.remove('hidden');
+            } else {
+                form.classList.add('hidden');
+            }
+        }
+
+        // DİNAMİK MALZEME SATIRI EKLEME
+        function malzemeEkle(kumanyaId, kutuNo) {
+            const container = document.getElementById('recete_kutu_' + kumanyaId + '_' + kutuNo);
+            const div = document.createElement('div');
+            div.className = "flex gap-2 mt-2";
+            div.innerHTML = `
+                <input type="text" name="malzeme_${kumanyaId}_${kutuNo}[]" list="depoList" placeholder="Malzeme Seç" class="w-2/3 p-2.5 border-2 border-gray-100 rounded-lg text-xs font-bold outline-none bg-gray-50 focus:border-indigo-400">
+                <input type="number" step="0.01" name="miktar_${kumanyaId}_${kutuNo}[]" placeholder="Gr/Adet" class="w-1/3 p-2.5 border-2 border-gray-100 rounded-lg text-xs font-bold text-center outline-none bg-gray-50 text-indigo-600 focus:border-indigo-400">
+                <button type="button" onclick="this.parentElement.remove()" class="w-10 h-10 bg-red-50 text-red-500 rounded-lg font-black hover:bg-red-500 hover:text-white transition shrink-0" title="Sil">✕</button>
+            `;
+            container.appendChild(div);
+        }
+
+        // 🚀 YENİ DİNAMİK KUTUCUK EKLEME FONKSİYONU
+        function yeniKutuEkle(kumanyaId) {
+            const container = document.getElementById('kutu_container_' + kumanyaId);
+            const kutuSayisi = container.querySelectorAll('.kutu-panel').length + 1;
+            
+            const div = document.createElement('div');
+            div.className = "kutu-panel bg-white p-5 rounded-xl border border-gray-200 shadow-sm relative animate-fade-in";
+            div.innerHTML = `
+                <button type="button" onclick="this.parentElement.remove()" class="absolute -top-3 -right-3 bg-red-100 hover:bg-red-600 text-red-600 hover:text-white w-8 h-8 rounded-full font-black text-sm transition flex items-center justify-center border-2 border-white shadow-md z-10" title="Bu Kutuyu Komple Sil">✕</button>
+                <input type="text" name="kutu_adi_${kumanyaId}_${kutuSayisi}" placeholder="${kutuSayisi}. Ürün/Kutu Adı (Örn: Salata)" class="w-full mb-4 border-b-2 border-indigo-100 pb-2 font-black text-sm outline-none text-indigo-900 focus:border-indigo-400">
+                <div id="recete_kutu_${kumanyaId}_${kutuSayisi}" class="space-y-2">
+                    <div class="flex gap-2">
+                        <input type="text" name="malzeme_${kumanyaId}_${kutuSayisi}[]" list="depoList" placeholder="Malzeme Seç" class="w-2/3 p-2.5 border-2 border-gray-100 rounded-lg text-xs font-bold outline-none bg-gray-50 focus:border-indigo-400">
+                        <input type="number" step="0.01" name="miktar_${kumanyaId}_${kutuSayisi}[]" placeholder="Gr/Adet" class="w-1/3 p-2.5 border-2 border-gray-100 rounded-lg text-xs font-bold text-center outline-none bg-gray-50 text-indigo-600 focus:border-indigo-400">
+                    </div>
+                </div>
+                <button type="button" onclick="malzemeEkle(${kumanyaId}, ${kutuSayisi})" class="mt-3 w-full bg-indigo-50 text-indigo-600 rounded-lg py-2 font-black text-[10px] uppercase tracking-widest hover:bg-indigo-100 transition">+ Malzeme Satırı Ekle</button>
+            `;
+            container.appendChild(div);
+        }
     </script>
 </head>
 <body class="bg-gray-50 flex min-h-screen font-sans">
 
-    <!-- SOL MENÜ -->
     {% include 'sidebar.html' %}
 
-    <!-- İÇERİK ALANI -->
     <div class="ml-64 flex-1 p-10">
         {% include 'topbar.html' %}
         
         <div class="mb-8 border-b border-gray-200 pb-6">
-            <h1 class="text-3xl font-black text-gray-800">🎒 Kumanya Yönetimi (Planlama & Üretim)</h1>
-            <p class="text-gray-500 font-bold mt-2">İleri tarihli kumanyaları planlayın, günü geldiğinde üretim reçetelerini oluşturun ve depoyla eşleştirin.</p>
+            <h1 class="text-3xl font-black text-gray-800">🎒 Kumanya Yönetimi</h1>
+            <p class="text-gray-500 font-bold mt-2">İleri tarihli kumanyaları planlayın, günü geldiğinde üretime alın ve depodan düşün.</p>
         </div>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -39,30 +85,19 @@
           {% endif %}
         {% endwith %}
 
-        <!-- SEKME BUTONLARI -->
         <div class="flex space-x-2 mb-8 border-b border-gray-200">
-    
-    <button id="btn-tab-planlama"
-            onclick="openTab('tab-planlama')"
-            class="tab-btn p-4 font-black border-t-4 border-transparent transition text-gray-400 text-sm tracking-wide rounded-t-xl">
-        📅 Kumanya Planlama
-    </button>
+            <button id="btn-tab-planlama" onclick="openTab('tab-planlama')" class="tab-btn p-4 font-black border-t-4 border-transparent transition text-gray-400 text-sm tracking-wide rounded-t-xl">
+                📅 İleri Tarihli Planlama
+            </button>
+            <button id="btn-tab-bugun" onclick="openTab('tab-bugun')" class="tab-btn p-4 font-black border-t-4 border-transparent transition text-gray-400 text-sm tracking-wide rounded-t-xl">
+                🎒 Bugünkü Kumanyalar ({{ secilen_tarih }})
+            </button>
+        </div>
 
-    <button id="btn-tab-bugun"
-            onclick="openTab('tab-bugun')"
-            class="tab-btn p-4 font-black border-t-4 border-transparent transition text-gray-400 text-sm tracking-wide rounded-t-xl">
-        🎒 Bugünkü Kumanyalar
-    </button>
-
-</div>
-
-        <!-- ========================================== -->
-        <!-- SEKME 1: PLANLAMA (REÇETESİZ) -->
-        <!-- ========================================== -->
-        <div id="tab-planlama" class="tab-content hidden space-y-8">
+        <div id="tab-planlama" class="tab-content hidden space-y-8 w-full max-w-7xl mx-auto">
             
             <div class="bg-white p-8 rounded-[2rem] shadow-sm border border-yellow-100 border-l-8 border-l-yellow-400">
-                <h3 class="text-xl font-black text-gray-800 mb-6">📅 Yeni Bir Etkinlik/Kumanya Planla</h3>
+                <h3 class="text-xl font-black text-gray-800 mb-6">📅 Yeni Etkinlik / Kumanya Planla</h3>
                 <form action="/kumanya" method="POST" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
                     <input type="hidden" name="islem_tipi" value="kumanya_planla">
                     <div>
@@ -83,30 +118,30 @@
                             <option value="Sandviç Menü">🥪 Sandviç Menü</option><option value="Sıcak Yemek">🍲 Sıcak Yemek</option>
                         </select>
                     </div>
-                    <div class="col-span-1 md:col-span-5">
-                        <button type="submit" class="w-full bg-yellow-400 text-yellow-900 font-black py-4 rounded-xl hover:bg-yellow-500 transition shadow-sm text-sm">PLANLA VE AJANDAYA KAYDET</button>
+                    <div class="col-span-1 md:col-span-5 mt-2">
+                        <button type="submit" class="w-full bg-yellow-400 text-yellow-900 font-black py-4 rounded-xl hover:bg-yellow-500 transition shadow-sm text-sm uppercase tracking-widest">Planla ve Ajandaya Ekle</button>
                     </div>
                 </form>
             </div>
 
             <div class="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
-                <div class="bg-gray-800 p-5"><h3 class="text-white font-black text-sm uppercase tracking-widest">Gelecek Planlamalar (Bugün ve Sonrası)</h3></div>
-                <div class="p-6">
+                <div class="bg-gray-800 p-5"><h3 class="text-white font-black text-sm uppercase tracking-widest">İleri Tarihli Planlar (Yarından İtibaren)</h3></div>
+                <div class="p-6 overflow-x-auto">
                     <table class="w-full text-left text-sm whitespace-nowrap">
                         <thead class="text-gray-400 border-b border-gray-100">
-                            <tr><th class="pb-3">Tarih</th><th class="pb-3">Kulüp Adı</th><th class="pb-3 text-center">Kişi</th><th class="pb-3 text-center">Durum</th><th class="pb-3"></th></tr>
+                            <tr><th class="pb-3">Tarih</th><th class="pb-3">Kulüp Adı</th><th class="pb-3 text-center">Kişi</th><th class="pb-3 text-center">Durum</th><th class="pb-3 text-right">Aksiyon</th></tr>
                         </thead>
                         <tbody class="divide-y divide-gray-50">
                             {% for p in planlar %}
                             <tr class="hover:bg-gray-50">
                                 <td class="py-4 font-bold text-gray-600">{{ p.tarih }}</td>
-                                <td class="py-4 font-black text-gray-800">{{ p.kulup_adi }} <span class="text-xs text-gray-400 block">{{ p.kumanya_tipi }}</span></td>
+                                <td class="py-4 font-black text-gray-800">{{ p.kulup_adi }} <span class="text-[10px] text-gray-400 uppercase tracking-widest block">{{ p.kumanya_tipi }}</span></td>
                                 <td class="py-4 text-center font-black text-yellow-600 text-lg">{{ p.kisi_sayisi }}</td>
                                 <td class="py-4 text-center"><span class="bg-gray-100 text-gray-500 px-3 py-1 rounded-lg text-xs font-bold">{{ p.durum }}</span></td>
                                 <td class="py-4 text-right">
                                     <form action="/kumanya" method="POST" class="m-0" onsubmit="return confirm('İptal edilsin mi?');">
                                         <input type="hidden" name="islem_tipi" value="kumanya_sil"><input type="hidden" name="kumanya_id" value="{{ p.id }}">
-                                        <button class="text-red-400 hover:text-red-600 font-bold text-xs bg-red-50 p-2 rounded-lg">İptal 🗑️</button>
+                                        <button class="text-red-400 hover:text-red-600 font-bold text-[10px] uppercase tracking-widest bg-red-50 px-3 py-2 rounded-lg transition">İptal Et</button>
                                     </form>
                                 </td>
                             </tr>
@@ -116,257 +151,120 @@
                 </div>
             </div>
         </div>
-        <div id="tab-bugun" class="tab-content hidden space-y-8">
 
-    <div class="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
-
-        <div class="bg-yellow-500 p-5 flex justify-between items-center">
-            <div>
-                <h3 class="text-white font-black text-sm uppercase tracking-widest">
-                    Bugünkü Kumanyalar
-                </h3>
-                <p class="text-yellow-100 text-xs font-bold mt-1">
-                    Üretime gönderilmeyi bekleyen kumanyalar
-                </p>
+        <div id="tab-bugun" class="tab-content hidden space-y-6 w-full max-w-7xl mx-auto">
+            
+            <div class="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                <span class="font-black text-gray-700 ml-4">İşlem Günü Seçin:</span>
+                <form action="/kumanya" method="GET" class="flex gap-2">
+                    <input type="date" name="tarih" value="{{ secilen_tarih }}" class="border-2 border-gray-200 rounded-xl p-2.5 font-bold text-sm outline-none bg-gray-50 cursor-pointer focus:border-indigo-400" onchange="this.form.submit()">
+                </form>
             </div>
-        </div>
 
-        <div class="p-6">
-
-            <table class="w-full text-left text-sm whitespace-nowrap">
-
-                <thead class="text-gray-400 border-b border-gray-100">
-                    <tr>
-                        <th class="pb-3">Kulüp</th>
-                        <th class="pb-3 text-center">Kişi</th>
-                        <th class="pb-3">Tür</th>
-                        <th class="pb-3 text-center">Durum</th>
-                        <th class="pb-3 text-right">İşlem</th>
-                    </tr>
-                </thead>
-
-                <tbody class="divide-y divide-gray-50">
-
-                    {% for k in bugunku_kumanyalar %}
-
-                    <tr class="hover:bg-gray-50">
-
-                        <td class="py-4">
-                            <div class="font-black text-gray-800">
-                                {{ k.kulup_adi }}
-                            </div>
-                            <div class="text-xs text-gray-400 font-bold">
-                                {{ k.tarih }}
-                            </div>
-                        </td>
-
-                        <td class="py-4 text-center font-black text-yellow-600 text-lg">
-                            {{ k.kisi_sayisi }}
-                        </td>
-
-                        <td class="py-4 font-bold text-gray-600">
-                            {{ k.kumanya_tipi }}
-                        </td>
-
-                        <td class="py-4 text-center">
-
-                            {% if k.durum == 'Planlandı' %}
-                                <span class="bg-gray-100 text-gray-600 px-3 py-1 rounded-lg text-xs font-bold">
-                                    📅 Planlandı
-                                </span>
-
-                            {% elif k.durum == 'Hazırlanıyor' %}
-                                <span class="bg-orange-100 text-orange-700 px-3 py-1 rounded-lg text-xs font-bold">
-                                    🍳 Hazırlanıyor
-                                </span>
-
-                            {% elif k.durum == 'Teslim Almayı Bekliyor' %}
-                                <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-lg text-xs font-bold">
-                                    📦 Teslim Bekliyor
-                                </span>
-
-                            {% elif k.durum == 'Teslim Edildi' %}
-                                <span class="bg-green-100 text-green-700 px-3 py-1 rounded-lg text-xs font-bold">
-                                    ✅ Teslim Edildi
-                                </span>
-                            {% endif %}
-
-                        </td>
-
-                        <td class="py-4 text-right">
-
-                            {% if k.durum == 'Planlandı' %}
-
-                            <form action="/kumanya_uretime_aktar"
-                                  method="POST">
-
-                                <input type="hidden"
-                                       name="kumanya_id"
-                                       value="{{ k.id }}">
-
-                                <button type="submit"
-                                        class="bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-black px-4 py-2 rounded-xl text-xs">
-
-                                    Üretime Aktar →
-
-                                </button>
-
-                            </form>
-
-                            {% elif k.durum == 'Teslim Almayı Bekliyor' %}
-
-                            <form action="/kumanya_teslim"
-                                  method="POST"
-                                  class="flex items-center justify-end gap-2">
-
-                                <input type="hidden"
-                                       name="kumanya_id"
-                                       value="{{ k.id }}">
-
-                                <label class="text-xs font-bold text-gray-500">
-                                    Teslim Edildi
-                                </label>
-
-                                <input type="checkbox"
-                                       onchange="this.form.submit()"
-                                       class="w-5 h-5">
-
-                            </form>
-
-                            {% endif %}
-
-                        </td>
-
-                    </tr>
-
-                    {% else %}
-
-                    <tr>
-                        <td colspan="5"
-                            class="py-10 text-center font-bold text-gray-400">
-
-                            Bugün için kumanya kaydı bulunmuyor.
-
-                        </td>
-                    </tr>
-
-                    {% endfor %}
-
-                </tbody>
-
-            </table>
-
-        </div>
-
-    </div>
-
-</div>
-
-        <!-- ========================================== -->
-        <!-- SEKME 2: ÜRETİM VE REÇETELER -->
-        <!-- ========================================== -->
-
-
-            <!-- GÜNÜN KUMANYALARI DÖNGÜSÜ -->
             {% for k in kumanyalar %}
-            <div class="bg-white p-8 rounded-[2rem] shadow-md border-t-4 {% if k.durum == 'Planlandı' %}border-red-500{% else %}border-green-500{% endif %}">
-                <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-gray-100 pb-4 mb-6">
+            <div class="bg-white p-8 rounded-[2rem] shadow-sm border-t-4 {% if k.durum == 'Planlandı' %}border-red-500{% elif k.durum == 'Hazırlanıyor' %}border-orange-500{% elif k.durum == 'Teslim Bekliyor' %}border-blue-500{% else %}border-green-500{% endif %}">
+                
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
                     <div>
                         <h4 class="text-2xl font-black text-gray-800">{{ k.kulup_adi }}</h4>
-                        <span class="text-sm font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-lg mt-2 inline-block">{{ k.kumanya_tipi }} | {{ k.kisi_sayisi }} Kişi</span>
+                        <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest bg-gray-100 px-3 py-1 rounded-lg mt-2 inline-block">{{ k.kumanya_tipi }} | {{ k.kisi_sayisi }} Kişi</span>
                     </div>
                     
-                    {% if k.durum != 'Planlandı' %}
-                    <!-- DURUM GÜNCELLEME ALANI (SADECE REÇETESİ GİRİLENLERE ÇIKAR) -->
-                    <form action="/kumanya" method="POST" class="mt-4 md:mt-0 flex gap-2 items-center bg-gray-50 p-2 rounded-xl border border-gray-200">
-                        <input type="hidden" name="islem_tipi" value="durum_guncelle"><input type="hidden" name="kumanya_id" value="{{ k.id }}"><input type="hidden" name="tarih" value="{{ secilen_tarih }}">
-                        <span class="text-xs font-bold text-gray-400 pl-2">Mutfak Durumu:</span>
-                        <select name="yeni_durum" class="p-3 rounded-lg font-bold text-sm outline-none cursor-pointer
-                            {% if k.durum == 'Hazırlanacak' %} bg-orange-100 text-orange-700
-                            {% elif k.durum == 'Hazırlandı' %} bg-blue-100 text-blue-700
-                            {% else %} bg-green-100 text-green-700 {% endif %}" onchange="this.form.submit()">
-                            <option value="Hazırlanacak" {% if k.durum == 'Hazırlanacak' %}selected{% endif %}>⏳ Hazırlanacak</option>
-                            <option value="Hazırlandı" {% if k.durum == 'Hazırlandı' %}selected{% endif %}>📦 Hazırlandı</option>
-                            <option value="Teslim Edildi" {% if k.durum == 'Teslim Edildi' %}selected{% endif %}>✅ Teslim Edildi</option>
-                        </select>
-                    </form>
-                    {% endif %}
+                    <div class="mt-4 md:mt-0 flex gap-3 items-center">
+                        {% if k.durum == 'Planlandı' %}
+                            <button onclick="toggleReceteForm('{{ k.id }}')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition shadow-md">
+                                Üretime Al (Reçete Gir)
+                            </button>
+                        {% elif k.durum == 'Hazırlanıyor' %}
+                            <span class="bg-orange-100 text-orange-700 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest animate-pulse border border-orange-200">🍳 Mutfakta Üretiliyor</span>
+                            <form action="/kumanya" method="POST" class="m-0">
+                                <input type="hidden" name="islem_tipi" value="kumanya_durum_tamamla">
+                                <input type="hidden" name="kumanya_id" value="{{ k.id }}">
+                                <input type="hidden" name="tarih" value="{{ secilen_tarih }}">
+                                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition shadow-md">Üretimi Bitir</button>
+                            </form>
+                        {% elif k.durum == 'Teslim Bekliyor' %}
+                            <span class="bg-blue-100 text-blue-700 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-blue-200">📦 Teslimat Bekliyor</span>
+                            <form action="/kumanya" method="POST" class="m-0">
+                                <input type="hidden" name="islem_tipi" value="kumanya_teslim_et">
+                                <input type="hidden" name="kumanya_id" value="{{ k.id }}">
+                                <input type="hidden" name="tarih" value="{{ secilen_tarih }}">
+                                <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition shadow-md flex items-center gap-2">✓ Teslim Edildi</button>
+                            </form>
+                        {% elif k.durum == 'Teslim Edildi' %}
+                            <span class="bg-green-50 text-green-600 px-6 py-3 rounded-xl text-sm font-black uppercase tracking-widest border border-green-200">✅ Başarıyla Teslim Edildi</span>
+                        {% endif %}
+                    </div>
                 </div>
 
                 {% if k.durum == 'Planlandı' %}
-                <!-- REÇETE GİRİŞ FORMU (HENÜZ GİRİLMEDİYSE ÇIKAR) -->
-                <div class="bg-red-50 border border-red-100 p-6 rounded-2xl">
-                    <div class="flex items-center gap-3 mb-4">
-                        <span class="text-2xl">⚠️</span>
+                <div id="recete_form_{{ k.id }}" class="hidden mt-6 bg-slate-50 border border-slate-200 p-6 rounded-2xl transition-all duration-300">
+                    <div class="flex items-center gap-3 mb-6">
+                        <span class="text-xl">⚠️</span>
                         <div>
-                            <h5 class="text-red-700 font-black">Reçete Bekleniyor</h5>
-                            <p class="text-red-500 text-xs font-bold">Lütfen bu kumanyanın içeriğini girin. (Not: Depoda 'Adet' olanları adet, 'KG/LT' olanları gram bazında girin.)</p>
+                            <h5 class="text-indigo-800 font-black text-sm uppercase tracking-widest">Üretim Reçetesi Oluştur</h5>
+                            <p class="text-indigo-500 text-[10px] font-bold uppercase tracking-widest">Bu malzemeler onaylandığında otomatik olarak depodan düşülecektir.</p>
                         </div>
                     </div>
 
-                    <form action="/kumanya" method="POST" class="mt-6">
+                    <form action="/kumanya" method="POST">
                         <input type="hidden" name="islem_tipi" value="kumanya_recete_ekle">
                         <input type="hidden" name="kumanya_id" value="{{ k.id }}"><input type="hidden" name="tarih" value="{{ secilen_tarih }}">
                         
-                        <!-- ÜSTTE 3, ALTTA 2 IZGARASI -->
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                            {% for i in range(1, 4) %}
-                                <div class="bg-white p-4 rounded-xl border border-red-100 shadow-sm">
-                                    <input type="text" name="kutu_adi_{{ k.id }}_{{ i }}" placeholder="{{ i }}. Ürün Adı (Örn: İçecek)" class="w-full mb-3 border-b-2 border-red-100 pb-2 font-black text-sm outline-none text-red-900">
-                                    <div id="recete_kutu_{{ k.id }}_{{ i }}" class="space-y-2">
-                                        <div class="flex gap-1"><input type="text" name="malzeme_{{ k.id }}_{{ i }}[]" list="depoList" placeholder="Malzeme Seç" class="w-2/3 p-2 border border-gray-200 rounded text-xs font-bold outline-none bg-gray-50"><input type="number" step="0.01" name="miktar_{{ k.id }}_{{ i }}[]" placeholder="Gr/Adet" class="w-1/3 p-2 border border-gray-200 rounded text-xs font-bold text-center outline-none bg-gray-50 text-blue-600"></div>
+                        <div id="kutu_container_{{ k.id }}" class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-4">
+                            <div class="kutu-panel bg-white p-5 rounded-xl border border-gray-200 shadow-sm relative">
+                                <input type="text" name="kutu_adi_{{ k.id }}_1" placeholder="1. Ürün/Kutu Adı (Örn: Sandviç)" class="w-full mb-4 border-b-2 border-indigo-100 pb-2 font-black text-sm outline-none text-indigo-900 focus:border-indigo-400">
+                                <div id="recete_kutu_{{ k.id }}_1" class="space-y-2">
+                                    <div class="flex gap-2">
+                                        <input type="text" name="malzeme_{{ k.id }}_1[]" list="depoList" placeholder="Malzeme Seç" class="w-2/3 p-2.5 border-2 border-gray-100 rounded-lg text-xs font-bold outline-none bg-gray-50 focus:border-indigo-400">
+                                        <input type="number" step="0.01" name="miktar_{{ k.id }}_1[]" placeholder="Gr/Adet" class="w-1/3 p-2.5 border-2 border-gray-100 rounded-lg text-xs font-bold text-center outline-none bg-gray-50 text-indigo-600 focus:border-indigo-400">
                                     </div>
-                                    <button type="button" onclick="malzemeEkle({{ k.id }}, {{ i }})" class="mt-2 w-full text-red-500 font-bold text-[10px] uppercase tracking-widest hover:text-red-700">+ Satır</button>
                                 </div>
-                            {% endfor %}
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-2/3 mx-auto">
-                            {% for i in range(4, 6) %}
-                                <div class="bg-white p-4 rounded-xl border border-red-100 shadow-sm">
-                                    <input type="text" name="kutu_adi_{{ k.id }}_{{ i }}" placeholder="{{ i }}. Ürün Adı" class="w-full mb-3 border-b-2 border-red-100 pb-2 font-black text-sm outline-none text-red-900">
-                                    <div id="recete_kutu_{{ k.id }}_{{ i }}" class="space-y-2">
-                                        <div class="flex gap-1"><input type="text" name="malzeme_{{ k.id }}_{{ i }}[]" list="depoList" placeholder="Malzeme Seç" class="w-2/3 p-2 border border-gray-200 rounded text-xs font-bold outline-none bg-gray-50"><input type="number" step="0.01" name="miktar_{{ k.id }}_{{ i }}[]" placeholder="Gr/Adet" class="w-1/3 p-2 border border-gray-200 rounded text-xs font-bold text-center outline-none bg-gray-50 text-blue-600"></div>
-                                    </div>
-                                    <button type="button" onclick="malzemeEkle({{ k.id }}, {{ i }})" class="mt-2 w-full text-red-500 font-bold text-[10px] uppercase tracking-widest hover:text-red-700">+ Satır</button>
-                                </div>
-                            {% endfor %}
+                                <button type="button" onclick="malzemeEkle({{ k.id }}, 1)" class="mt-3 w-full bg-indigo-50 text-indigo-600 rounded-lg py-2 font-black text-[10px] uppercase tracking-widest hover:bg-indigo-100 transition">+ Malzeme Satırı Ekle</button>
+                            </div>
                         </div>
 
-                        <button type="submit" class="mt-6 w-full bg-red-600 text-white font-black py-4 rounded-xl hover:bg-red-700 shadow-md">REÇETEYİ ONAYLA VE ÜRETİME AL</button>
+                        <button type="button" onclick="yeniKutuEkle({{ k.id }})" class="mb-6 bg-slate-200 hover:bg-slate-300 text-slate-700 px-5 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest transition flex items-center gap-2 shadow-sm">
+                            <span class="text-base leading-none">+</span> Ekstra Kutu / Paket Ekle
+                        </button>
+
+                        <div class="flex flex-col sm:flex-row gap-4 mt-2 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100">
+                            <div class="w-full sm:w-1/3">
+                                <label class="block text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-2">Kaç Kişilik Üretilecek?</label>
+                                <input type="number" name="uretim_kisi_sayisi" value="{{ k.kisi_sayisi }}" required class="w-full border-2 border-indigo-200 p-4 rounded-xl font-black text-2xl text-center outline-none bg-white text-indigo-700 focus:border-indigo-500 shadow-sm transition">
+                            </div>
+                            <button type="submit" class="w-full sm:w-2/3 bg-indigo-600 text-white font-black py-4 rounded-xl hover:bg-indigo-700 shadow-md text-xs uppercase tracking-widest transition self-end">
+                                Reçeteyi Onayla ve Üretimi Başlat
+                            </button>
+                        </div>
                     </form>
                 </div>
-                
                 {% else %}
-                <!-- REÇETESİ GİRİLMİŞ (ÖZET GÖRÜNÜM) -->
-                <div class="bg-gray-50 border border-gray-200 p-6 rounded-2xl flex flex-col xl:flex-row gap-6 items-start xl:items-center">
-                    <div class="flex-1 whitespace-normal leading-relaxed text-sm">
-                        {{ k.icerik_detay | safe }}
-                    </div>
+                <div class="mt-6 bg-gray-50 border border-gray-200 p-5 rounded-xl">
+                    <h5 class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 border-b border-gray-200 pb-2">📋 Üretim İçeriği (Depodan Düşülenler)</h5>
+                    <div class="text-sm text-gray-700 leading-relaxed">{{ k.icerik_detay | safe }}</div>
                 </div>
                 {% endif %}
 
             </div>
             {% else %}
-            <div class="bg-white p-10 rounded-[2rem] text-center shadow-sm border border-gray-100">
-                <span class="text-4xl block mb-4">💤</span>
-                <h4 class="text-gray-500 font-black text-lg">Bu tarihe ait bir üretim/kumanya kaydı yok.</h4>
+            <div class="bg-white p-16 rounded-[2rem] text-center shadow-sm border border-gray-100">
+                <span class="text-5xl block mb-4 opacity-30">💤</span>
+                <h4 class="text-gray-500 font-black text-lg uppercase tracking-widest">Bugün İçin Kumanya Kaydı Yok</h4>
             </div>
             {% endfor %}
 
-            <!-- ========================================== -->
-            <!-- VARYANS / KIYASLAMA TABLOSU -->
-            <!-- ========================================== -->
             <div class="bg-gray-900 p-8 rounded-[2rem] shadow-xl border-t-8 border-yellow-500 mt-12">
-                <h3 class="text-2xl font-black text-white mb-2 flex items-center gap-2">⚖️ Denetim: Reçete vs. Depo Çıkışı</h3>
-                <p class="text-gray-400 font-bold mb-8 text-sm">Aşağıdaki tablo, oluşturulan reçetelerin toplam ihtiyacını ve depodan Kumanya öğünü için fiili olarak çıkılan miktarı karşılaştırır. Eksik malzeme varsa sistem üretimi kilitler.</p>
+                <h3 class="text-xl font-black text-white mb-2 flex items-center gap-2">⚖️ Denetim: Reçete vs. Depo Çıkışı</h3>
+                <p class="text-gray-400 font-bold mb-8 text-[11px] uppercase tracking-widest">Reçete teorik ihtiyacı ile depodan fiili çıkışın kıyaslaması.</p>
                 
-                <div class="overflow-x-auto">
+                <div class="overflow-x-auto custom-scrollbar pb-4">
                     <table class="w-full text-left whitespace-nowrap">
                         <thead class="bg-gray-800 text-gray-400 uppercase text-[10px] tracking-widest border-b border-gray-700">
                             <tr>
                                 <th class="p-4 rounded-tl-xl">Kullanılan Malzeme</th>
-                                <th class="p-4 text-center text-yellow-500">Reçete (Teorik) İhtiyacı</th>
-                                <th class="p-4 text-center text-blue-400">Depodan Fiili Verilen</th>
+                                <th class="p-4 text-center text-yellow-500">Reçete (Teorik)</th>
+                                <th class="p-4 text-center text-blue-400">Depodan Çıkılan</th>
                                 <th class="p-4 text-center rounded-tr-xl">Fark Durumu</th>
                             </tr>
                         </thead>
@@ -374,21 +272,21 @@
                             {% for adi, veriler in gunluk_ihtiyac.items() %}
                                 {% set fark = veriler.cikan - veriler.gereken %}
                                 <tr class="hover:bg-gray-800 transition">
-                                    <td class="p-4 font-black text-gray-200 text-base">{{ adi }}</td>
-                                    <td class="p-4 text-center font-bold text-yellow-500">{{ "%.2f"|format(veriler.gereken) }} <span class="text-xs">{{ veriler.birim }}</span></td>
-                                    <td class="p-4 text-center font-black text-blue-400 text-lg">{{ "%.2f"|format(veriler.cikan) }} <span class="text-xs">{{ veriler.birim }}</span></td>
+                                    <td class="p-4 font-black text-gray-200 text-sm">{{ adi }}</td>
+                                    <td class="p-4 text-center font-bold text-yellow-500">{{ "%.2f"|format(veriler.gereken) }} <span class="text-[10px]">{{ veriler.birim }}</span></td>
+                                    <td class="p-4 text-center font-black text-blue-400 text-base">{{ "%.2f"|format(veriler.cikan) }} <span class="text-[10px]">{{ veriler.birim }}</span></td>
                                     <td class="p-4 text-center">
                                         {% if fark > 0.1 %}
-                                            <span class="bg-red-900/50 text-red-400 font-bold px-4 py-2 rounded-xl text-xs block w-full border border-red-800">📉 +{{ "%.2f"|format(fark) }} {{ veriler.birim }} Fazla</span>
+                                            <span class="bg-red-900/50 text-red-400 font-bold px-3 py-1.5 rounded-lg text-[10px] uppercase tracking-widest block w-full border border-red-800">📉 +{{ "%.2f"|format(fark) }} {{ veriler.birim }} Fazla</span>
                                         {% elif fark < -0.1 %}
-                                            <span class="bg-orange-900/50 text-orange-400 font-bold px-4 py-2 rounded-xl text-xs block w-full border border-orange-800">⚠️ {{ "%.2f"|format(fark) }} {{ veriler.birim }} Eksik</span>
+                                            <span class="bg-orange-900/50 text-orange-400 font-bold px-3 py-1.5 rounded-lg text-[10px] uppercase tracking-widest block w-full border border-orange-800">⚠️ {{ "%.2f"|format(fark) }} {{ veriler.birim }} Eksik</span>
                                         {% else %}
-                                            <span class="bg-green-900/50 text-green-400 font-black px-4 py-2 rounded-xl text-xs block w-full border border-green-800">✅ Tam Uyumlu</span>
+                                            <span class="bg-green-900/50 text-green-400 font-black px-3 py-1.5 rounded-lg text-[10px] uppercase tracking-widest block w-full border border-green-800">✅ Tam Uyumlu</span>
                                         {% endif %}
                                     </td>
                                 </tr>
                             {% else %}
-                                <tr><td colspan="4" class="p-10 text-center text-gray-600 font-bold">Bugün için üretim verisi yok.</td></tr>
+                                <tr><td colspan="4" class="p-8 text-center text-gray-500 font-bold text-xs uppercase tracking-widest">Bugün için üretim verisi yok.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -398,22 +296,8 @@
         </div>
     </div>
 
-    <!-- DEPODAN ÜRÜN LİSTESİ ÇEKME İÇİN GİZLİ DATALIST -->
     <datalist id="depoList">
         {% for urun in depo_urunler %}<option value="{{ urun.urun_adi }}">{% endfor %}
     </datalist>
-
-    <script>
-        function malzemeEkle(kumanyaId, kutuNo) {
-            const container = document.getElementById('recete_kutu_' + kumanyaId + '_' + kutuNo);
-            const div = document.createElement('div');
-            div.className = "flex gap-1 mt-2";
-            div.innerHTML = `
-                <input type="text" name="malzeme_${kumanyaId}_${kutuNo}[]" list="depoList" placeholder="Malzeme Seç" class="w-2/3 p-2 border border-gray-200 rounded text-xs font-bold outline-none bg-gray-50">
-                <input type="number" step="0.01" name="miktar_${kumanyaId}_${kutuNo}[]" placeholder="Gr/Adet" class="w-1/3 p-2 border border-gray-200 rounded text-xs font-bold text-center outline-none bg-gray-50 text-blue-600">
-            `;
-            container.appendChild(div);
-        }
-    </script>
 </body>
 </html>
