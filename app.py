@@ -1211,8 +1211,9 @@ def et_isleme():
         harcanan = guvenli_float(request.form.get('harcanan_miktar'))
         kiymalik = guvenli_float(request.form.get('kiymalik'))
         kusbasi = guvenli_float(request.form.get('kusbasi'))
-        sotelik = guvenli_float(request.form.get('sotelik'))
-        kemik = guvenli_float(request.form.get('kemik'))
+        kemikli = guvenli_float(request.form.get('kemikli')) # YENİ: Sote kalktı, Kemikli geldi
+        kemik = guvenli_float(request.form.get('kemik'))     # AYRILDI: Temiz Kemik (Kemik suyu vb.)
+        fire = guvenli_float(request.form.get('fire'))       # AYRILDI: Çöp (Depoya girmez)
 
         lot = conn.execute("SELECT * FROM stok_lotlari WHERE id=?", (lot_id,)).fetchone()
 
@@ -1228,17 +1229,25 @@ def et_isleme():
 
         kategori = "🥩 Kırmızı Et"
 
-        for urun, mik in [('Dana Kıyma', kiymalik), ('Dana Kuşbaşı', kusbasi), ('Dana Sote', sotelik), ('Kemik / Fire', kemik)]:
+        # DEPOYA GİRENLER (Sote yok, Fire yok)
+        for urun, mik in [('Dana Kıyma', kiymalik), ('Dana Kuşbaşı', kusbasi), ('Kemikli Et', kemikli), ('Dana Kemik', kemik)]:
             if mik > 0:
                 mevcut = conn.execute('SELECT id FROM depo WHERE urun_adi COLLATE NOCASE = ?', (urun,)).fetchone()
                 if mevcut: conn.execute('UPDATE depo SET miktar = miktar + ? WHERE id=?', (mik, mevcut['id']))
                 else: conn.execute('INSERT INTO depo (kategori, urun_adi, miktar, birim) VALUES (?,?,?,?)', (kategori, urun, mik, 'KG'))
 
-        kaynak_detay = f"{kaynak_urun_adi} [Damga: {damga_no}]"
-        conn.execute('INSERT INTO et_isleme_log (kaynak, harcanan, detay, lot_id) VALUES (?,?,?,?)',
-                     (kaynak_detay, harcanan, f"Kıyma: {kiymalik} | Kuşbaşı: {kusbasi} | Sote: {sotelik} | Kemik/Fire: {kemik}", lot_id))
+        # ÇÖPE GİDEN FİRE (Depoya girmez, Raporlar için Fire tablosuna eklenir)
+        if fire > 0:
+            conn.execute('INSERT INTO fire_kayitlari (kategori, urun_adi, miktar, birim, kullanici, aciklama) VALUES (?, ?, ?, ?, ?, ?)',
+                         (kategori, "Karkas Parçalama Firesi", fire, "KG", session.get('isim', 'Sistem'), f"Damga No: {damga_no}"))
 
-        conn.commit(); flash(f"✅ {damga_no} damgalı karkas başarıyla parçalandı.", "success")
+        # İZLENEBİLİRLİK (Damga numarasıyla her şeyin kaydı tek logda)
+        kaynak_detay = f"{kaynak_urun_adi} [Damga: {damga_no}]"
+        detay_str = f"Kıyma: {kiymalik} | Kuşbaşı: {kusbasi} | Kemikli: {kemikli} | Kemik: {kemik} | Fire: {fire}"
+        conn.execute('INSERT INTO et_isleme_log (kaynak, harcanan, detay, lot_id) VALUES (?,?,?,?)',
+                     (kaynak_detay, harcanan, detay_str, lot_id))
+
+        conn.commit(); flash(f"✅ {damga_no} damgalı karkas başarıyla parçalandı ve fireler ayrıştırıldı.", "success")
         return redirect(url_for('et_isleme'))
 
     et_stoklari = conn.execute("""
@@ -1261,7 +1270,8 @@ def et_isleme():
     lot_karneleri = []
     for l in son_sevkiyatlar:
         loglar = conn.execute("SELECT harcanan, detay FROM et_isleme_log WHERE lot_id=?", (l['id'],)).fetchall()
-        t_harcanan = 0; t_kiyma = 0; t_kusbasi = 0; t_sote = 0; t_kemik = 0
+        # Sote gitti. Kemikli ve Fire'nin ilk değeri 0 olarak eklendi:
+        t_harcanan = 0; t_kiyma = 0; t_kusbasi = 0; t_kemikli = 0; t_kemik = 0; t_fire = 0
         for lg in loglar:
             t_harcanan += lg['harcanan']
             d = lg['detay']
@@ -1269,16 +1279,18 @@ def et_isleme():
             except: pass
             try: t_kusbasi += float(re.search(r'Kuşbaşı:\s*([\d\.]+)', d).group(1))
             except: pass
-            try: t_sote += float(re.search(r'Sote:\s*([\d\.]+)', d).group(1))
+            try: t_kemikli += float(re.search(r'Kemikli:\s*([\d\.]+)', d).group(1)) # Sote gitti Kemikli geldi
             except: pass
-            try: t_kemik += float(re.search(r'Kemik/Fire:\s*([\d\.]+)', d).group(1))
+            try: t_kemik += float(re.search(r'Kemik:\s*([\d\.]+)', d).group(1))     # Sadece Kemik
+            except: pass
+            try: t_fire += float(re.search(r'Fire:\s*([\d\.]+)', d).group(1))       # Sadece Fire
             except: pass
 
         lot_karneleri.append({
             'id': l['id'], 'tarih': l['tarih'][:10], 'damga': l['lot_damga_no'] if l['lot_damga_no'] else 'DAMGASIZ',
             'urun': l['urun_adi'], 'baslangic': l['baslangic_miktar'], 'kalan': l['kalan_miktar'],
-            'islenen': t_harcanan, 'kiyma': t_kiyma, 'kusbasi': t_kusbasi, 'sote': t_sote, 'kemik': t_kemik,
-            'fire_oran': round((t_kemik / t_harcanan * 100), 1) if t_harcanan > 0 else 0
+            'islenen': t_harcanan, 'kiyma': t_kiyma, 'kusbasi': t_kusbasi, 'kemikli': t_kemikli, 'kemik': t_kemik, 'fire': t_fire,
+            'fire_oran': round((t_fire / t_harcanan * 100), 1) if t_harcanan > 0 else 0
         })
 
     conn.close()
@@ -1496,15 +1508,34 @@ def raporlar():
         ist_dict['toplam_gelen'] = ist['personel_sayisi'] + ist['ogrenci_sayisi']
         rapor_listesi.append(ist_dict)
 
-    # FİRE VERİLERİ (Grafik ve Tablo İçin)
+    # FİRE VERİLERİ 
     fire_kategori_verisi = conn.execute("SELECT kategori, SUM(miktar) as toplam_miktar, birim FROM fire_kayitlari GROUP BY kategori, birim").fetchall()
     fire_detay_verisi = conn.execute("SELECT urun_adi, kategori, miktar, birim, tarih, kullanici, aciklama FROM fire_kayitlari ORDER BY tarih DESC LIMIT 100").fetchall()
+
+    # YENİ: İK VE DEVAMSIZLIK VERİLERİ (Geç kalan, gelmeyen, raporlu)
+    ik_vukuat_listesi = conn.execute('''
+        SELECT p.ad_soyad, l.tarih, l.durum as vukuat_turu
+        FROM pdks_log l
+        JOIN personeller p ON l.personel_id = p.id
+        WHERE l.durum IN ('Geç Geldi', 'Gelmedi')
+        ORDER BY l.tarih DESC LIMIT 100
+    ''').fetchall()
+
+    ik_raporlular = conn.execute('''
+        SELECT p.ad_soyad, i.baslangic_tarihi, i.bitis_tarihi, i.izin_turu as vukuat_turu, i.aciklama 
+        FROM personel_izinler i
+        JOIN personeller p ON i.personel_id = p.id
+        WHERE i.izin_turu = 'Hastalık Raporu'
+        ORDER BY i.baslangic_tarihi DESC LIMIT 100
+    ''').fetchall()
 
     conn.close()
     return render_template('raporlar.html',
                            raporlar=rapor_listesi,
                            fire_kategori_verisi=[dict(row) for row in fire_kategori_verisi],
-                           fire_detay_verisi=[dict(row) for row in fire_detay_verisi])
+                           fire_detay_verisi=[dict(row) for row in fire_detay_verisi],
+                           ik_vukuat_listesi=[dict(row) for row in ik_vukuat_listesi],
+                           ik_raporlular=[dict(row) for row in ik_raporlular])
 
 @app.route('/uretim-fire-ekle', methods=['POST'])
 @login_required
@@ -1543,12 +1574,15 @@ def uretim_fire_ekle():
         conn.close()
 
     return redirect(url_for('uretim'))
+
 @app.route('/personel', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def personel():
     conn = get_db_connection()
     bugun = date.today().strftime('%Y-%m-%d')
+    # YENİ: URL'den gelen tarihi okur, yoksa bugünü varsayar
+    secilen_tarih = request.args.get('tarih', bugun)
 
     if request.method == 'POST':
         islem = request.form.get('islem_tipi')
@@ -1564,48 +1598,58 @@ def personel():
             flash("Personel pasife alındı (Arşivlendi).", "success")
 
         elif islem == 'izin_ekle':
-            p_id = request.form['personel_id']; bas = request.form['baslangic']; bit = request.form['bitis']; tur = request.form['izin_turu']; notlar = request.form['aciklama']
-
-            # 🔥 SİSTEM KALKANI: İzin Çakışma Kontrolü
+            p_id = request.form['personel_id']; bas = request.form['baslangic']; bit = request.form['bitis']; tur = request.form['izin_turu']
+            notlar = request.form.get('aciklama', '')
             cakisma = conn.execute("SELECT id FROM personel_izinler WHERE personel_id=? AND baslangic_tarihi <= ? AND bitis_tarihi >= ?", (p_id, bit, bas)).fetchone()
-
-            if cakisma:
-                flash("HATA: Bu personel seçilen tarihlerde zaten izinde! Lütfen mükerrer işlem yapmayın.", "error")
+            if cakisma: flash("HATA: Bu personel seçilen tarihlerde zaten izinde! Lütfen mükerrer işlem yapmayın.", "error")
             else:
                 conn.execute("INSERT INTO personel_izinler (personel_id, baslangic_tarihi, bitis_tarihi, izin_turu, aciklama) VALUES (?,?,?,?,?)", (p_id, bas, bit, tur, notlar))
                 conn.commit(); flash("İzin başarıyla sisteme işlendi.", "success")
 
         elif islem == 'izin_erken_bitir':
             izin_id = request.form['izin_id']
-            # İzni "dün" bitmiş gibi gösteriyoruz ki "bugün" iş başı yapmış sayılsın!
             dun = (date.today() - timedelta(days=1)).strftime('%Y-%m-%d')
             conn.execute("UPDATE personel_izinler SET bitis_tarihi=? WHERE id=?", (dun, izin_id))
-            conn.commit()
-            flash("Personelin izni bitirildi ve BUGÜN itibarıyla işbaşı yaptı.", "success")
+            conn.commit(); flash("Personelin izni bitirildi ve BUGÜN itibarıyla işbaşı yaptı.", "success")
 
         elif islem == 'izin_iptal':
-            # Yanlışlıkla girilen veya tamamen silinmek istenen izinler için
             izin_id = request.form['izin_id']
-            conn.execute("DELETE FROM personel_izinler WHERE id=?", (izin_id,))
-            conn.commit()
+            conn.execute("DELETE FROM personel_izinler WHERE id=?", (izin_id,)); conn.commit()
             flash("Hatalı izin kaydı sistemden tamamen silindi.", "success")
-
+            
         elif islem == 'izin_hakki_guncelle':
-            p_id = request.form['personel_id']
-            yeni_hak = request.form['izin_hakki']
+            p_id = request.form['personel_id']; yeni_hak = request.form['izin_hakki']
             conn.execute("UPDATE personeller SET izin_hakki=? WHERE id=?", (yeni_hak, p_id))
-            conn.commit(); flash("Personel izin bakiyesi (hakkı) güncellendi.", "success")
+            conn.commit(); flash("Personel izin bakiyesi güncellendi.", "success")
 
-        elif islem == 'pdks_senkronize':
-            flash("Resmi API entegrasyonu bekleniyor. Lütfen BİDB'den API yetkisi talep ediniz.", "error")
+        elif islem == 'yoklama_kaydet':
+            islem_tarihi = request.form.get('islem_tarihi', bugun) # YENİ: Geçmiş tarihi yakala
+            personel_idler = request.form.getlist('personel_id[]')
+            durumlar = request.form.getlist('durum[]')
+            
+            conn.execute("DELETE FROM pdks_log WHERE tarih=?", (islem_tarihi,))
+            for pid, dur in zip(personel_idler, durumlar):
+                conn.execute("INSERT INTO pdks_log (tarih, personel_id, durum) VALUES (?,?,?)", (islem_tarihi, pid, dur))
+            conn.commit()
+            flash(f"✅ {islem_tarihi} tarihli yoklama başarıyla kaydedildi.", "success")
+            # Kaydettikten sonra o günün ekranında kalması için:
+            return redirect(url_for('personel', tarih=islem_tarihi))
 
-        return redirect(url_for('personel'))
+        return redirect(url_for('personel', tarih=secilen_tarih))
 
-    # İzin haklarını ve kullanılan günleri hesapla
+    # AKTİF PERSONEL VE İZİN HESAPLAMALARI
     personeller_raw = conn.execute("SELECT * FROM personeller WHERE durum='Aktif' ORDER BY ad_soyad").fetchall()
     personeller = []
     from datetime import datetime
+    
+    # 1. Dashboard ve İzin sekmesi için BUGÜNKÜ izinliler
+    bugun_izinliler_db = conn.execute("SELECT personel_id FROM personel_izinler WHERE baslangic_tarihi <= ? AND bitis_tarihi >= ?", (bugun, bugun)).fetchall()
+    izinli_idler = [i['personel_id'] for i in bugun_izinliler_db]
 
+    # 2. YENİ: Yoklama tablosu için SEÇİLEN TARİHTEKİ izinliler (Geçmişe dönük izinde miydi kontrolü)
+    secilen_tarih_izinliler = conn.execute("SELECT personel_id FROM personel_izinler WHERE baslangic_tarihi <= ? AND bitis_tarihi >= ?", (secilen_tarih, secilen_tarih)).fetchall()
+    secilen_izinli_idler = [i['personel_id'] for i in secilen_tarih_izinliler]
+    
     for p in personeller_raw:
         p_dict = dict(p)
         izinler_p = conn.execute("SELECT baslangic_tarihi, bitis_tarihi FROM personel_izinler WHERE personel_id=? AND izin_turu='Yıllık İzin'", (p['id'],)).fetchall()
@@ -1616,19 +1660,47 @@ def personel():
                 e = datetime.strptime(iz['bitis_tarihi'], '%Y-%m-%d')
                 if e >= b: kullanilan += (e - b).days + 1
             except: pass
-
+        
         p_dict['kullanilan_izin'] = kullanilan
         p_dict['izin_hakki'] = p['izin_hakki'] if 'izin_hakki' in p.keys() else 14
         p_dict['kalan_izin'] = p_dict['izin_hakki'] - kullanilan
+        p_dict['bugun_izinli'] = p['id'] in izinli_idler
+
+        son_izin = conn.execute("SELECT baslangic_tarihi, bitis_tarihi FROM personel_izinler WHERE personel_id=? ORDER BY bitis_tarihi DESC LIMIT 1", (p['id'],)).fetchone()
+        p_dict['son_izin_bas'] = son_izin['baslangic_tarihi'] if son_izin else '-'
+        p_dict['son_izin_bit'] = son_izin['bitis_tarihi'] if son_izin else '-'
+
+        # YENİ: VUKUAT SORGUSU (En son ne zaman işe gelmedi veya geç kaldı?)
+        vukuat = conn.execute("SELECT tarih, durum FROM pdks_log WHERE personel_id=? AND durum IN ('Gelmedi', 'Geç Geldi') ORDER BY tarih DESC LIMIT 1", (p['id'],)).fetchone()
+        if vukuat:
+            p_dict['son_vukuat'] = f"{vukuat['tarih']} ({vukuat['durum']})"
+            p_dict['son_vukuat_durum'] = vukuat['durum']
+        else:
+            p_dict['son_vukuat'] = "-"
+            p_dict['son_vukuat_durum'] = ""
+
+        # Karnedeki tablo için son 5 hareket
+        son_yoklamalar = conn.execute("SELECT tarih, durum FROM pdks_log WHERE personel_id=? AND tarih <= ? ORDER BY tarih DESC LIMIT 5", (p['id'], bugun)).fetchall()
+        p_dict['son_yoklamalar'] = [dict(y) for y in son_yoklamalar]
+
         personeller.append(p_dict)
 
-    bugun_izinliler_db = conn.execute("SELECT personel_id FROM personel_izinler WHERE baslangic_tarihi <= ? AND bitis_tarihi >= ?", (bugun, bugun)).fetchall()
-    izinli_idler = [i['personel_id'] for i in bugun_izinliler_db]
-    izinler = conn.execute('''SELECT i.*, p.ad_soyad FROM personel_izinler i JOIN personeller p ON i.personel_id = p.id ORDER BY i.baslangic_tarihi DESC LIMIT 50''').fetchall()
-    pdks_kayitlari = conn.execute('''SELECT l.*, p.ad_soyad, p.gorev FROM pdks_log l JOIN personeller p ON l.personel_id = p.id WHERE l.tarih=? ORDER BY l.giris_saati DESC''', (bugun,)).fetchall()
+    # Seçilen Tarihteki Yoklama Kayıtlarını Çek
+    bugunku_yoklama_db = conn.execute("SELECT personel_id, durum FROM pdks_log WHERE tarih=?", (secilen_tarih,)).fetchall()
+    yoklama_dict = {y['personel_id']: y['durum'] for y in bugunku_yoklama_db}
+
+    # YENİ EKLENEN: Üst metrikler (Kartlar) için o günün anlık hesaplaması
+    gec_kalan_sayisi = sum(1 for v in yoklama_dict.values() if v == 'Geç Geldi')
+    gelmeyen_sayisi = sum(1 for v in yoklama_dict.values() if v == 'Gelmedi')
+
+    bugunku_izinler_detay = conn.execute('''SELECT i.*, p.ad_soyad, p.gorev FROM personel_izinler i JOIN personeller p ON i.personel_id = p.id WHERE i.baslangic_tarihi <= ? AND i.bitis_tarihi >= ? ORDER BY p.ad_soyad''', (bugun, bugun)).fetchall()
+
+    tum_izinler = conn.execute('''SELECT i.*, p.ad_soyad FROM personel_izinler i JOIN personeller p ON i.personel_id = p.id ORDER BY i.baslangic_tarihi DESC LIMIT 50''').fetchall()
 
     conn.close()
-    return render_template('personel.html', personeller=personeller, izinler=izinler, pdks_kayitlari=pdks_kayitlari, izinli_idler=izinli_idler, bugun=bugun)
+    # render_template içine gec_kalan_sayisi ve gelmeyen_sayisi eklendi:
+    return render_template('personel.html', personeller=personeller, bugunku_izinler_detay=bugunku_izinler_detay, tum_izinler=tum_izinler, izinli_idler=izinli_idler, secilen_izinli_idler=secilen_izinli_idler, yoklama_dict=yoklama_dict, bugun=bugun, secilen_tarih=secilen_tarih, gec_kalan_sayisi=gec_kalan_sayisi, gelmeyen_sayisi=gelmeyen_sayisi)
+
 @app.route('/api/urun-gecmisi/<int:urun_id>')
 @login_required
 def urun_gecmisi(urun_id):
@@ -1745,7 +1817,8 @@ def et_arsivi_api(offset):
     lot_karneleri = []
     for l in lotlar:
         loglar = conn.execute("SELECT harcanan, detay FROM et_isleme_log WHERE lot_id=?", (l['id'],)).fetchall()
-        t_harcanan = 0; t_kiyma = 0; t_kusbasi = 0; t_sote = 0; t_kemik = 0
+        # Sote gitti. Kemikli ve Fire'nin ilk değeri 0 olarak eklendi:
+        t_harcanan = 0; t_kiyma = 0; t_kusbasi = 0; t_kemikli = 0; t_kemik = 0; t_fire = 0
         for lg in loglar:
             t_harcanan += lg['harcanan']
             d = lg['detay']
@@ -1753,16 +1826,18 @@ def et_arsivi_api(offset):
             except: pass
             try: t_kusbasi += float(re.search(r'Kuşbaşı:\s*([\d\.]+)', d).group(1))
             except: pass
-            try: t_sote += float(re.search(r'Sote:\s*([\d\.]+)', d).group(1))
+            try: t_kemikli += float(re.search(r'Kemikli:\s*([\d\.]+)', d).group(1)) # Sote gitti Kemikli geldi
             except: pass
-            try: t_kemik += float(re.search(r'Kemik/Fire:\s*([\d\.]+)', d).group(1))
+            try: t_kemik += float(re.search(r'Kemik:\s*([\d\.]+)', d).group(1))     # Sadece Kemik
+            except: pass
+            try: t_fire += float(re.search(r'Fire:\s*([\d\.]+)', d).group(1))       # Sadece Fire
             except: pass
 
         lot_karneleri.append({
             'id': l['id'], 'tarih': l['tarih'][:10], 'damga': l['lot_damga_no'] if l['lot_damga_no'] else 'DAMGASIZ',
             'urun': l['urun_adi'], 'baslangic': l['baslangic_miktar'], 'kalan': l['kalan_miktar'],
-            'islenen': t_harcanan, 'kiyma': t_kiyma, 'kusbasi': t_kusbasi, 'sote': t_sote, 'kemik': t_kemik,
-            'fire_oran': round((t_kemik / t_harcanan * 100), 1) if t_harcanan > 0 else 0
+            'islenen': t_harcanan, 'kiyma': t_kiyma, 'kusbasi': t_kusbasi, 'kemikli': t_kemikli, 'kemik': t_kemik, 'fire': t_fire,
+            'fire_oran': round((t_fire / t_harcanan * 100), 1) if t_harcanan > 0 else 0
         })
     conn.close()
     return jsonify(lot_karneleri)

@@ -2,64 +2,68 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Yemekhane | Personel & PDKS</title>
+    <title>Yemekhane | İK & Yoklama</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px;}
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px;}
         .custom-scrollbar:hover::-webkit-scrollbar-thumb { background: #94a3b8; }
+        .modal-active { overflow: hidden; }
         @media (max-width: 768px) { #main-content-area { margin-left: 0 !important; } }
     </style>
     <script>
-        function switchTab(tabId) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.tab-btn').forEach(el => {
-                el.classList.remove('bg-slate-800', 'text-white', 'shadow-md');
-                el.classList.add('bg-transparent', 'text-slate-500', 'hover:bg-slate-100');
+        function openTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-md');
+                btn.classList.add('bg-transparent', 'text-slate-500');
             });
-            document.getElementById(tabId).classList.remove('hidden');
-            const activeBtn = document.getElementById('btn-' + tabId);
-            activeBtn.classList.remove('bg-transparent', 'text-slate-500', 'hover:bg-slate-100');
-            activeBtn.classList.add('bg-slate-800', 'text-white', 'shadow-md');
+            
+            document.getElementById(tabName).classList.remove('hidden');
+            const activeBtn = document.getElementById('btn-' + tabName);
+            activeBtn.classList.remove('bg-transparent', 'text-slate-500');
+            activeBtn.classList.add('bg-indigo-600', 'text-white', 'shadow-md');
+            localStorage.setItem('personelSekme', tabName);
         }
+        document.addEventListener("DOMContentLoaded", () => openTab(localStorage.getItem('personelSekme') || 'tab-yoklama'));
 
-        function filterIzinler() {
-            let input = document.getElementById("izinArama").value.toLowerCase();
-            let rows = document.querySelectorAll(".izin-row");
+        function openPersonelModal(dataStr) {
+            const data = JSON.parse(dataStr);
+            document.getElementById('m-isim').innerText = data.ad;
+            document.getElementById('m-gorev').innerText = data.gorev;
+            document.getElementById('m-kalan-izin').innerText = data.kalan + " Gün";
+            document.getElementById('m-son-izin').innerText = data.son_bas !== '-' ? `${data.son_bas} ➔ ${data.son_bit}` : 'Hiç İzin Kullanmadı';
+            
+            let yoklamaHtml = '';
+            if(data.gecmis && data.gecmis.length > 0) {
+                data.gecmis.forEach(y => {
+                    let renk = y.durum === 'Geldi' ? 'text-emerald-500' : (y.durum === 'İzinli' ? 'text-sky-500' : (y.durum === 'Geç Geldi' ? 'text-orange-500' : 'text-rose-500'));
+                    yoklamaHtml += `<div class="flex justify-between py-2 border-b border-slate-100 last:border-0"><span class="text-xs font-bold text-slate-500">${y.tarih}</span><span class="text-[10px] font-black uppercase tracking-widest ${renk}">${y.durum}</span></div>`;
+                });
+            } else {
+                yoklamaHtml = '<div class="text-xs font-bold text-slate-400 py-2">Geçmiş yoklama kaydı yok.</div>';
+            }
+            document.getElementById('m-yoklama-gecmis').innerHTML = yoklamaHtml;
+            
+            document.getElementById('personelModal').classList.remove('hidden');
+        }
+        function closePersonelModal() { document.getElementById('personelModal').classList.add('hidden'); }
+
+        function filterTable(inputId, rowClass, dataAttr) {
+            let input = document.getElementById(inputId).value.toLowerCase();
+            let rows = document.querySelectorAll("." + rowClass);
             rows.forEach(row => {
-                let adSoyad = row.getAttribute("data-isim").toLowerCase();
-                row.style.display = adSoyad.includes(input) ? "" : "none";
+                let text = row.getAttribute(dataAttr).toLowerCase();
+                row.style.display = text.includes(input) ? "" : "none";
             });
         }
-
-        // AKILLI ARAMA ÇUBUĞU JS KODLARI (İZİN FORMU İÇİN)
-        function openPersonelSelect() {
-            document.getElementById('customPersonelList').classList.remove('hidden');
-        }
-
+        
+        function openPersonelSelect() { document.getElementById('customPersonelList').classList.remove('hidden'); }
         document.addEventListener('click', function(e) {
             let container = document.getElementById('customPersonelSelectContainer');
-            if (container && !container.contains(e.target)) {
-                document.getElementById('customPersonelList').classList.add('hidden');
-            }
+            if (container && !container.contains(e.target)) { document.getElementById('customPersonelList').classList.add('hidden'); }
         });
-
-        function filterPersonelSelect() {
-            openPersonelSelect();
-            let input = document.getElementById('searchPersonelInput').value.toLowerCase();
-            let items = document.querySelectorAll('.personel-select-item');
-            
-            items.forEach(item => {
-                let text = item.getAttribute('data-isim').toLowerCase();
-                if (text.includes(input)) {
-                    item.style.display = 'block';
-                } else {
-                    item.style.display = 'none';
-                }
-            });
-        }
-
         function selectPersonelItem(id, isim) {
             document.getElementById('hiddenPersonelId').value = id;
             document.getElementById('searchPersonelInput').value = isim;
@@ -72,329 +76,365 @@
     {% include 'sidebar.html' %}
 
     <div id="main-content-area" class="ml-64 flex-1 p-6 md:p-10 min-w-0 transition-all duration-300">
-        
         {% include 'topbar.html' %}
         
-        <div class="mb-8 border-b border-slate-200 pb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 w-full max-w-[1400px] mx-auto">
+        <div class="mb-8 border-b border-slate-200 pb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
             <div>
-                <h1 class="text-2xl md:text-3xl font-black tracking-tight flex items-center gap-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-600"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                    Personel & PDKS Yönetimi
+                <h1 class="text-3xl font-black tracking-tight text-slate-800 flex items-center gap-3">
+                    <span class="text-indigo-600 text-3xl">👥</span> İK & Personel Yoklama
                 </h1>
-                <p class="text-slate-500 font-medium mt-2 text-sm">Utarit sisteminden anlık veriler, personel listesi ve izin yönetimi.</p>
+                <p class="text-slate-500 font-medium mt-2 text-sm">Günlük yoklamaları alın, izin süreçlerini takip edin ve personel karnelerini inceleyin.</p>
             </div>
-            <form action="/personel" method="POST" class="m-0 w-full md:w-auto">
-                <input type="hidden" name="islem_tipi" value="pdks_senkronize">
-                <button type="submit" class="w-full bg-white hover:bg-slate-50 text-indigo-600 border border-slate-200 px-6 py-3.5 rounded-xl font-black shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] transition flex items-center justify-center gap-2 text-sm uppercase tracking-widest">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                    BİDB Senkronizasyonu
-                </button>
-            </form>
+            <button onclick="alert('BİDB API yetkilendirmesi bekleniyor.')" class="w-full md:w-auto bg-white hover:bg-slate-50 text-indigo-600 border border-slate-200 px-6 py-3.5 rounded-xl font-black shadow-sm transition flex items-center justify-center gap-2 text-[10px] uppercase tracking-widest">
+                <span>🔄</span> BİDB Otomatik Senkronizasyon
+            </button>
         </div>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
-            <div class="w-full max-w-[1400px] mx-auto mb-6">
             {% for category, message in messages %}
-              <div class="p-4 mb-3 rounded-2xl font-bold shadow-sm flex items-center gap-3 {% if category == 'error' %}bg-rose-50 text-rose-600 border border-rose-200{% else %}bg-emerald-50 text-emerald-600 border border-emerald-200{% endif %}">
-                {% if category == 'error' %}
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                {% else %}
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                {% endif %}
+              <div class="p-4 mb-6 rounded-2xl font-bold shadow-sm flex items-center gap-3 {% if category == 'error' %}bg-rose-50 text-rose-600 border border-rose-200{% else %}bg-emerald-50 text-emerald-600 border border-emerald-200{% endif %}">
                 {{ message }}
               </div>
             {% endfor %}
-            </div>
           {% endif %}
         {% endwith %}
 
-        <div class="w-full max-w-[1400px] mx-auto">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                <div class="bg-white p-5 rounded-3xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-200/60 relative overflow-hidden group">
-                    <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-blue-500"></div>
-                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Şu An İçeride</span>
-                    <span class="text-2xl font-black text-slate-800">0 <span class="text-xs font-bold text-slate-400">Kişi</span></span>
-                </div>
-                <div class="bg-white p-5 rounded-3xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-200/60 relative overflow-hidden group">
-                    <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-yellow-500"></div>
-                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Geç Kalanlar</span>
-                    <span class="text-2xl font-black text-yellow-600">0</span>
-                </div>
-                <div class="bg-white p-5 rounded-3xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-200/60 relative overflow-hidden group">
-                    <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-rose-500"></div>
-                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Gelmeyenler</span>
-                    <span class="text-2xl font-black text-rose-600">0</span>
-                </div>
-                <div class="bg-white p-5 rounded-3xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-200/60 relative overflow-hidden group">
-                    <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-purple-500"></div>
-                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Bugün İzinli</span>
-                    <span class="text-2xl font-black text-purple-600">{{ izinli_idler|length }}</span>
-                </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-200/60 relative overflow-hidden group">
+                <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-indigo-500"></div>
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Toplam Personel</span>
+                <span class="text-2xl font-black text-slate-800">{{ personeller|length }} <span class="text-[10px] font-bold text-slate-400">Kişi</span></span>
             </div>
-
-            <div class="flex gap-1.5 mb-8 bg-slate-200/50 p-1.5 rounded-2xl w-max shadow-inner overflow-x-auto max-w-full">
-                <button id="btn-tab-pdks" onclick="switchTab('tab-pdks')" class="tab-btn bg-slate-800 text-white shadow-md px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition whitespace-nowrap">Günlük Devam (PDKS)</button>
-                <button id="btn-tab-personel" onclick="switchTab('tab-personel')" class="tab-btn bg-transparent text-slate-500 hover:bg-slate-100 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition whitespace-nowrap">Personel Listesi</button>
-                <button id="btn-tab-izinler" onclick="switchTab('tab-izinler')" class="tab-btn bg-transparent text-slate-500 hover:bg-slate-100 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition whitespace-nowrap">İzin Yönetimi</button>
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-200/60 relative overflow-hidden group">
+                <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-purple-500"></div>
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Seçili Gün İzinli</span>
+                <span class="text-2xl font-black text-purple-600">{{ secilen_izinli_idler|length }} <span class="text-[10px] font-bold text-slate-400">Kişi</span></span>
             </div>
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-200/60 relative overflow-hidden group">
+                <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-yellow-500"></div>
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Seçili Gün Geç Kalanlar</span>
+                <span class="text-2xl font-black text-yellow-600">{{ gec_kalan_sayisi }} <span class="text-[10px] font-bold text-slate-400">Kişi</span></span>
+            </div>
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-200/60 relative overflow-hidden group">
+                <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-rose-500"></div>
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Seçili Gün Gelmeyenler</span>
+                <span class="text-2xl font-black text-rose-600">{{ gelmeyen_sayisi }} <span class="text-[10px] font-bold text-slate-400">Kişi</span></span>
+            </div>
+        </div>
 
-            <div id="tab-pdks" class="tab-content w-full">
-                <div class="bg-white rounded-[2rem] shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-200 overflow-hidden">
-                    <div class="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
-                        <h3 class="font-black text-slate-800 flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-500"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                            {{ bugun }} Tarihli Utarit (API) Logları
-                        </h3>
-                        <span class="text-[9px] font-black text-slate-500 bg-white px-3 py-1.5 rounded-lg border border-slate-200 uppercase tracking-widest shadow-sm">API İzni Bekleniyor</span>
+        <div class="flex gap-1.5 mb-8 bg-slate-200/50 p-1.5 rounded-2xl w-max shadow-inner max-w-full overflow-x-auto">
+            <button id="btn-tab-yoklama" onclick="openTab('tab-yoklama')" class="tab-btn bg-indigo-600 text-white shadow-md px-6 py-3 rounded-xl font-black text-[11px] uppercase tracking-widest transition whitespace-nowrap">📋 Günlük Yoklama ({{ secilen_tarih }})</button>
+            <button id="btn-tab-izinler" onclick="openTab('tab-izinler')" class="tab-btn bg-transparent text-slate-500 hover:bg-slate-100 px-6 py-3 rounded-xl font-black text-[11px] uppercase tracking-widest transition whitespace-nowrap">🏖️ İzin Yönetimi & Arşiv</button>
+            <button id="btn-tab-personel" onclick="openTab('tab-personel')" class="tab-btn bg-transparent text-slate-500 hover:bg-slate-100 px-6 py-3 rounded-xl font-black text-[11px] uppercase tracking-widest transition whitespace-nowrap">👥 Personeller & İK</button>
+        </div>
+
+        <div id="tab-yoklama" class="tab-content hidden w-full max-w-6xl">
+            <div class="bg-white rounded-[2rem] shadow-sm border border-slate-200 p-8">
+                
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 border-b border-slate-100 pb-6">
+                    <div>
+                        <h3 class="font-black text-slate-800 text-xl">Yoklama Listesi</h3>
+                        <p class="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">Tarih seçerek geçmişe dönük işlem yapabilirsiniz.</p>
                     </div>
-                    <div class="p-16 text-center flex flex-col items-center justify-center bg-white">
-                        <div class="w-20 h-20 bg-slate-50 rounded-2xl flex items-center justify-center mb-6 border border-slate-100 shadow-sm text-slate-300">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                        </div>
-                        <h4 class="text-lg font-black text-slate-800 mb-3">API Entegrasyonu Bekleniyor</h4>
-                        <p class="text-slate-500 font-medium max-w-md text-xs leading-relaxed mb-6">
-                            Yıldız Teknik Üniversitesi Bilgi İşlem Daire Başkanlığı (BİDB) tarafından Yemekhane otomasyonu için gerekli Utarit API yetkileri sağlandığında, tüm personelin giriş-çıkış hareketleri burada listelenecektir.
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <div id="tab-personel" class="tab-content hidden w-full grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="md:col-span-1 bg-white p-6 rounded-[2rem] shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-200 h-max">
-                    <h3 class="font-black text-slate-800 mb-5 flex items-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-500"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
-                        Yeni Personel Ekle
-                    </h3>
-                    <form action="/personel" method="POST" class="space-y-4">
-                        <input type="hidden" name="islem_tipi" value="personel_ekle">
-                        <div>
-                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ad Soyad</label>
-                            <input type="text" name="ad_soyad" required class="w-full border-2 border-slate-100 p-3 rounded-xl text-sm font-bold bg-slate-50 outline-none focus:border-indigo-400 transition">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Sicil No / Kart No</label>
-                            <input type="text" name="sicil_no" required class="w-full border-2 border-slate-100 p-3 rounded-xl text-sm font-bold bg-slate-50 outline-none focus:border-indigo-400 transition">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Görevi</label>
-                            <input type="text" name="gorev" placeholder="Örn: Aşçıbaşı" class="w-full border-2 border-slate-100 p-3 rounded-xl text-sm font-bold bg-slate-50 outline-none focus:border-indigo-400 transition">
-                        </div>
-                        <div class="flex gap-3">
-                            <div class="flex-1">
-                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Mesai Başlangıç</label>
-                                <input type="time" name="mesai_baslangic" value="08:00" class="w-full border-2 border-slate-100 p-3 rounded-xl text-sm font-bold bg-slate-50 outline-none focus:border-indigo-400 transition">
-                            </div>
-                            <div class="flex-1">
-                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Mesai Bitiş</label>
-                                <input type="time" name="mesai_bitis" value="17:00" class="w-full border-2 border-slate-100 p-3 rounded-xl text-sm font-bold bg-slate-50 outline-none focus:border-indigo-400 transition">
-                            </div>
-                        </div>
-                        <button type="submit" class="w-full bg-slate-800 text-white font-black py-3.5 rounded-xl text-[11px] uppercase tracking-widest hover:bg-slate-900 transition shadow-sm mt-2">Sisteme Kaydet</button>
-                    </form>
-
-                    <div class="mt-8 border-t border-slate-100 pt-6">
-                        <h4 class="font-black text-slate-800 mb-4 flex items-center gap-2 text-sm">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-emerald-500"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-                            Toplu Personel Yükle
-                        </h4>
-                        <form action="/personel-import" method="POST" enctype="multipart/form-data" class="space-y-4">
-                            <div>
-                                <input type="file" name="file" accept=".xlsx, .csv" required class="w-full border-2 border-slate-100 p-1.5 rounded-xl text-xs font-bold bg-slate-50 outline-none file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-[10px] file:uppercase file:tracking-widest file:font-black file:bg-slate-800 file:text-white hover:file:bg-slate-700 transition cursor-pointer text-slate-500">
-                            </div>
-                            <button type="submit" class="w-full bg-white border border-slate-200 text-slate-700 font-black py-3 rounded-xl text-[10px] uppercase tracking-widest hover:border-emerald-300 hover:text-emerald-600 transition shadow-sm">Excel'den İçeri Aktar</button>
+                    
+                    <div class="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
+                        <form action="/personel" method="GET" class="m-0 flex items-center bg-slate-50 p-2 rounded-xl border border-slate-200 w-full sm:w-auto justify-between shadow-sm">
+                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3 mr-2">Tarih:</label>
+                            <input type="date" name="tarih" value="{{ secilen_tarih }}" class="border-none bg-white py-1.5 px-3 rounded-lg text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-400 shadow-sm cursor-pointer text-indigo-700 transition" onchange="this.form.submit()">
                         </form>
+                        
+                        <button form="yoklamaForm" type="submit" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-md transition shrink-0">
+                            💾 LİSTEYİ KAYDET
+                        </button>
                     </div>
                 </div>
 
-                <div class="md:col-span-2 bg-white rounded-[2rem] shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-200 overflow-hidden">
-                    <div class="overflow-x-auto max-h-[700px] custom-scrollbar">
-                        <table class="w-full text-left whitespace-nowrap">
+                <form id="yoklamaForm" action="/personel" method="POST">
+                    <input type="hidden" name="islem_tipi" value="yoklama_kaydet">
+                    <input type="hidden" name="islem_tarihi" value="{{ secilen_tarih }}">
+                    
+                    <div class="overflow-x-auto custom-scrollbar border border-slate-100 rounded-2xl">
+                        <table class="w-full text-left text-sm whitespace-nowrap">
                             <thead class="bg-slate-50 text-slate-400 uppercase text-[10px] tracking-widest border-b border-slate-100 sticky top-0 z-10">
-                                <tr><th class="p-5 pl-6">Ad Soyad</th><th class="p-5">Görev / Sicil</th><th class="p-5 text-center">Mesai</th><th class="p-5 text-center pr-6">Durum</th></tr>
+                                <tr><th class="p-4 pl-6">Personel Adı</th><th class="p-4 text-center">Görev</th><th class="p-4 text-center pr-6">Durum İşaretle</th></tr>
                             </thead>
-                            <tbody class="divide-y divide-slate-50 text-sm">
+                            <tbody class="divide-y divide-slate-50 font-bold">
                                 {% for p in personeller %}
                                 <tr class="hover:bg-slate-50/50 transition">
-                                    <td class="p-5 pl-6 font-black text-slate-800">{{ p.ad_soyad }}</td>
-                                    <td class="p-5"><span class="block font-bold text-slate-600">{{ p.gorev }}</span><span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mt-0.5">Sicil: {{ p.sicil_no }}</span></td>
-                                    <td class="p-5 text-center text-slate-500 font-bold">{{ p.mesai_baslangic }} - {{ p.mesai_bitis }}</td>
-                                    <td class="p-5 text-center pr-6">
-                                        {% if p.id in izinli_idler %}
-                                            <span class="bg-purple-50 text-purple-600 border border-purple-100 px-3 py-1.5 rounded-lg text-[10px] uppercase tracking-widest font-black">İzinli</span>
+                                    <td class="p-4 pl-6">
+                                        <div class="flex items-center gap-3">
+                                            <button type="button" onclick="openPersonelModal('{{ {'ad': p.ad_soyad, 'gorev': p.gorev, 'kalan': p.kalan_izin, 'son_bas': p.son_izin_bas, 'son_bit': p.son_izin_bit, 'gecmis': p.son_yoklamalar}|tojson|forceescape }}')" class="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-indigo-100 hover:text-indigo-600 flex items-center justify-center transition" title="Karnesini Gör">📋</button>
+                                            <span class="text-slate-800 font-black">{{ p.ad_soyad }}</span>
+                                        </div>
+                                    </td>
+                                    <td class="p-4 text-center text-xs text-slate-500">{{ p.gorev }}</td>
+                                    <td class="p-4 text-center pr-6">
+                                        {% if p.id in secilen_izinli_idler %}
+                                            <input type="hidden" name="personel_id[]" value="{{ p.id }}">
+                                            <input type="hidden" name="durum[]" value="İzinli">
+                                            <span class="bg-sky-50 text-sky-600 border border-sky-200 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest w-full max-w-[200px] inline-block text-center cursor-not-allowed opacity-80 shadow-inner">🏖️ O Gün İzindeydi</span>
                                         {% else %}
-                                            <span class="bg-emerald-50 text-emerald-600 border border-emerald-100 px-3 py-1.5 rounded-lg text-[10px] uppercase tracking-widest font-black">Aktif</span>
+                                            <input type="hidden" name="personel_id[]" value="{{ p.id }}">
+                                            {% set mevcut_durum = yoklama_dict.get(p.id, 'Geldi') %}
+                                            <select name="durum[]" class="border p-2 rounded-lg font-black text-xs uppercase tracking-widest outline-none shadow-sm w-full max-w-[200px] text-center cursor-pointer transition
+                                                {% if mevcut_durum == 'Geldi' %} bg-emerald-50 text-emerald-700 border-emerald-200
+                                                {% elif mevcut_durum == 'Geç Geldi' %} bg-orange-50 text-orange-700 border-orange-200
+                                                {% else %} bg-rose-50 text-rose-700 border-rose-200 {% endif %}
+                                                " onchange="this.className = 'border p-2 rounded-lg font-black text-xs uppercase tracking-widest outline-none shadow-sm w-full max-w-[200px] text-center cursor-pointer transition ' + (this.value=='Geldi' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : (this.value=='Geç Geldi' ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-rose-50 text-rose-700 border-rose-200'))">
+                                                
+                                                <option value="Geldi" {% if mevcut_durum == 'Geldi' %}selected{% endif %}>✅ GELDİ</option>
+                                                <option value="Geç Geldi" {% if mevcut_durum == 'Geç Geldi' %}selected{% endif %}>⏰ GEÇ GELDİ</option>
+                                                <option value="Gelmedi" {% if mevcut_durum == 'Gelmedi' %}selected{% endif %}>❌ GELMEDİ</option>
+                                            </select>
                                         {% endif %}
                                     </td>
                                 </tr>
-                                {% else %}
-                                <tr><td colspan="4" class="p-10 text-center text-slate-400 font-bold text-xs uppercase tracking-widest">Kayıtlı personel bulunmuyor.</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="tab-izinler" class="tab-content hidden w-full space-y-6">
+            
+            <div class="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden mb-6">
+                <div class="bg-sky-50 p-6 border-b border-sky-100 flex items-center gap-3">
+                    <span class="text-2xl">🏖️</span>
+                    <div>
+                        <h3 class="font-black text-sky-900 text-lg tracking-tight">Bugün İzinli Olan Personeller ({{ bugun }})</h3>
+                        <p class="text-[10px] font-bold text-sky-700 uppercase tracking-widest mt-0.5">Mevcut aktif izinler</p>
+                    </div>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {% for iz in bugunku_izinler_detay %}
+                        <div class="border border-slate-100 p-5 rounded-2xl bg-slate-50 hover:bg-white shadow-sm hover:border-sky-200 hover:shadow-md transition duration-300 flex flex-col h-full">
+                            
+                            <div class="flex justify-between items-start gap-2 mb-1">
+                                <h4 class="font-black text-slate-800 text-base leading-tight line-clamp-2" title="{{ iz.ad_soyad }}">{{ iz.ad_soyad }}</h4>
+                                <span class="shrink-0 bg-sky-100 text-sky-700 text-[8px] font-black px-2 py-1 rounded-md uppercase tracking-widest border border-sky-200 text-center">{{ iz.izin_turu }}</span>
+                            </div>
+                            
+                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">{{ iz.gorev }}</p>
+                            
+                            <div class="mt-auto bg-white rounded-lg p-2.5 text-center border border-slate-100 shadow-inner">
+                                <span class="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">İzin Tarihleri</span>
+                                <span class="text-xs font-black text-slate-700">{{ iz.baslangic_tarihi }} ➔ {{ iz.bitis_tarihi }}</span>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="col-span-full text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                            <span class="text-3xl opacity-50 block mb-2">🏢</span>
+                            <span class="font-bold text-slate-400 text-[11px] uppercase tracking-widest">Bugün izinli personel bulunmuyor. Herkes işte!</span>
+                        </div>
+                        {% endfor %}
+                    </div>
                 </div>
             </div>
 
-            <div id="tab-izinler" class="tab-content hidden w-full grid grid-cols-1 lg:grid-cols-12 gap-6">
-                
-                <div class="lg:col-span-4 flex flex-col gap-6">
-                    
-                    <div class="bg-white p-6 rounded-[2rem] shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-200 overflow-visible">
-                        <h3 class="font-black text-slate-800 mb-5 flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-500"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></svg>
-                            Yeni İzin Ekle
-                        </h3>
-                        <form action="/personel" method="POST" class="space-y-4">
-                            <input type="hidden" name="islem_tipi" value="izin_ekle">
-                            
-                            <div class="relative" id="customPersonelSelectContainer">
-                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Personel Ara ve Seç</label>
-                                <input type="hidden" name="personel_id" id="hiddenPersonelId" required>
-                                
-                                <div class="relative">
-                                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                                    </span>
-                                    <input type="text" id="searchPersonelInput" placeholder="Örn: Ahmet Yılmaz..." class="w-full border-2 border-slate-100 pl-9 pr-3 py-3 rounded-xl text-sm font-bold bg-white outline-none focus:border-indigo-400 transition cursor-text shadow-inner" oninput="filterPersonelSelect()" onclick="openPersonelSelect()" autocomplete="off" required>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-1 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 h-max">
+                    <h3 class="font-black text-slate-800 mb-5 text-lg flex items-center gap-2">➕ Yeni İzin Planla</h3>
+                    <form action="/personel" method="POST" class="space-y-4">
+                        <input type="hidden" name="islem_tipi" value="izin_ekle">
+                        <div class="relative" id="customPersonelSelectContainer">
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Personel Ara ve Seç</label>
+                            <input type="hidden" name="personel_id" id="hiddenPersonelId" required>
+                            <input type="text" id="searchPersonelInput" placeholder="Örn: Ahmet..." class="w-full border-2 border-slate-100 p-3 rounded-xl text-sm font-bold bg-slate-50 outline-none focus:border-indigo-400 transition" oninput="filterTable('searchPersonelInput', 'personel-select-item', 'data-isim'); openPersonelSelect();" onclick="openPersonelSelect()" autocomplete="off" required>
+                            <div id="customPersonelList" class="hidden absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-[200px] overflow-y-auto custom-scrollbar">
+                                {% for p in personeller %}
+                                <div class="personel-select-item p-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50" data-isim="{{ p.ad_soyad }}" onclick="selectPersonelItem('{{ p.id }}', '{{ p.ad_soyad }}')">
+                                    <span class="font-black text-slate-800 text-sm block">{{ p.ad_soyad }}</span>
+                                    <span class="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5 block">Kalan İzin: {{ p.kalan_izin }} Gün</span>
                                 </div>
-                                
-                                <div id="customPersonelList" class="hidden absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-[250px] overflow-y-auto custom-scrollbar">
-                                    {% for p in personeller %}
-                                    <div class="personel-select-item p-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 transition-colors" data-id="{{ p.id }}" data-isim="{{ p.ad_soyad }}" onclick="selectPersonelItem('{{ p.id }}', '{{ p.ad_soyad }}')">
-                                        <span class="font-black text-slate-800 text-sm block">{{ p.ad_soyad }}</span>
-                                        <span class="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5 block">{{ p.gorev }} | Kalan İzin: {{ p.kalan_izin }} Gün</span>
-                                    </div>
-                                    {% endfor %}
-                                </div>
+                                {% endfor %}
                             </div>
+                        </div>
 
-                            <div class="flex gap-3">
-                                <div class="flex-1">
-                                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Başlangıç</label>
-                                    <input type="date" name="baslangic" required class="w-full border-2 border-slate-100 p-3 rounded-xl text-sm font-bold bg-slate-50 outline-none focus:border-indigo-400 cursor-pointer transition">
-                                </div>
-                                <div class="flex-1">
-                                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Bitiş</label>
-                                    <input type="date" name="bitis" required class="w-full border-2 border-slate-100 p-3 rounded-xl text-sm font-bold bg-slate-50 outline-none focus:border-indigo-400 cursor-pointer transition">
-                                </div>
+                        <div class="flex gap-3">
+                            <div class="flex-1">
+                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Başlangıç</label>
+                                <input type="date" name="baslangic" required class="w-full border-2 border-slate-100 p-3 rounded-xl text-xs font-bold bg-slate-50 outline-none focus:border-indigo-400 cursor-pointer">
                             </div>
-                            <div>
-                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">İzin Türü</label>
-                                <select name="izin_turu" class="w-full border-2 border-slate-100 p-3 rounded-xl text-sm font-bold bg-slate-50 outline-none focus:border-indigo-400 cursor-pointer transition">
-                                    <option value="Yıllık İzin">Yıllık İzin (Bakiyeden Düşer)</option>
-                                    <option value="Hastalık Raporu">Hastalık Raporu</option>
-                                    <option value="Mazeret İzni">Mazeret İzni</option>
-                                    <option value="Ücretsiz İzin">Ücretsiz İzin</option>
-                                </select>
+                            <div class="flex-1">
+                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Bitiş</label>
+                                <input type="date" name="bitis" required class="w-full border-2 border-slate-100 p-3 rounded-xl text-xs font-bold bg-slate-50 outline-none focus:border-indigo-400 cursor-pointer">
                             </div>
-                            <div>
-                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Açıklama / Not</label>
-                                <input type="text" name="aciklama" placeholder="Gerekliyse ek not..." class="w-full border-2 border-slate-100 p-3 rounded-xl text-sm font-bold bg-slate-50 outline-none focus:border-indigo-400 transition">
-                            </div>
-                            <button type="submit" class="w-full bg-indigo-600 text-white font-black py-3.5 rounded-xl text-[11px] uppercase tracking-widest hover:bg-indigo-700 transition shadow-sm mt-2">İzni Onayla & Başlat</button>
-                        </form>
-                    </div>
-
-                    <div class="bg-white p-6 rounded-[2rem] shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-200">
-                        <h3 class="font-black text-slate-800 mb-4 flex items-center gap-2 text-sm">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-emerald-500"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
-                            İzin Hakkı (Bakiye) Düzenle
-                        </h3>
-                        <form action="/personel" method="POST" class="flex flex-col gap-3">
-                            <input type="hidden" name="islem_tipi" value="izin_hakki_guncelle">
-                            <select name="personel_id" required class="w-full border-2 border-slate-100 p-2.5 rounded-xl text-xs font-bold bg-slate-50 outline-none focus:border-indigo-400 cursor-pointer transition">
-                                {% for p in personeller %}<option value="{{ p.id }}">{{ p.ad_soyad }} (Şu an: {{ p.izin_hakki }} Gün)</option>{% endfor %}
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">İzin Türü</label>
+                            <select name="izin_turu" class="w-full border-2 border-slate-100 p-3 rounded-xl text-xs font-bold bg-slate-50 outline-none focus:border-indigo-400 cursor-pointer">
+                                <option value="Yıllık İzin">Yıllık İzin (Bakiyeden Düşer)</option>
+                                <option value="Hastalık Raporu">Hastalık Raporu</option>
+                                <option value="Mazeret İzni">Mazeret İzni</option>
                             </select>
-                            <div class="flex gap-2">
-                                <input type="number" name="izin_hakki" placeholder="Toplam Hak (Gün)" required class="w-full border-2 border-slate-100 p-2.5 rounded-xl text-xs font-bold bg-slate-50 outline-none focus:border-indigo-400 text-center transition">
-                                <button type="submit" class="bg-white border border-slate-200 text-slate-700 font-black px-4 rounded-xl text-[10px] uppercase tracking-widest hover:border-emerald-300 hover:text-emerald-600 transition shadow-sm shrink-0">Güncelle</button>
-                            </div>
-                        </form>
-                    </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Açıklama / Not</label>
+                            <input type="text" name="aciklama" placeholder="Örn: Memleket ziyareti vb." class="w-full border-2 border-slate-100 p-3 rounded-xl text-sm font-bold bg-slate-50 outline-none focus:border-indigo-400 transition">
+                        </div>
+                        <button type="submit" class="w-full bg-slate-800 text-white font-black py-4 rounded-xl text-[10px] uppercase tracking-widest hover:bg-black transition shadow-md mt-2">İzni Sisteme İşle</button>
+                    </form>
                 </div>
 
-                <div class="lg:col-span-8 bg-white rounded-[2rem] shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-200 overflow-hidden flex flex-col h-max max-h-[850px]">
-                    <div class="bg-slate-50 border-b border-slate-100 p-5 flex flex-col sm:flex-row justify-between items-center gap-4">
-                        <h3 class="font-black text-slate-800 flex items-center gap-2">
-                            İzinli Personel Listesi
-                        </h3>
-                        <div class="relative w-full sm:w-64">
-                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                            </span>
-                            <input type="text" id="izinArama" onkeyup="filterIzinler()" placeholder="Tabloda isimle ara..." class="w-full border-2 border-slate-100 pl-9 pr-3 py-2 rounded-xl text-xs font-bold bg-white outline-none focus:border-indigo-400 transition shadow-inner">
-                        </div>
+                <div class="lg:col-span-2 bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden flex flex-col max-h-[600px]">
+                    <div class="bg-slate-50 border-b border-slate-100 p-5 flex justify-between items-center">
+                        <h3 class="font-black text-slate-800 text-base">Geçmiş & Gelecek İzin Arşivi</h3>
+                        <input type="text" id="arsivArama" onkeyup="filterTable('arsivArama', 'arsiv-row', 'data-isim')" placeholder="İsimle ara..." class="border-2 border-slate-100 px-3 py-2 rounded-xl text-xs font-bold bg-white outline-none focus:border-indigo-400 transition shadow-inner">
                     </div>
-                    
                     <div class="overflow-x-auto custom-scrollbar flex-1">
                         <table class="w-full text-left whitespace-nowrap">
-                            <thead class="bg-white text-slate-400 uppercase text-[10px] tracking-widest border-b border-slate-100 sticky top-0 z-10">
-                                <tr>
-                                    <th class="p-4 pl-6">Personel / İzin Bakiyesi</th>
-                                    <th class="p-4 text-center">İzin Tarihleri</th>
-                                    <th class="p-4 text-center">Türü</th>
-                                    <th class="p-4 text-right pr-6">Durum / Aksiyon</th>
-                                </tr>
+                            <thead class="bg-white text-slate-400 uppercase text-[9px] tracking-widest border-b border-slate-100 sticky top-0 z-10 shadow-sm">
+                                <tr><th class="p-4 pl-6">Personel</th><th class="p-4 text-center">Tarih Aralığı</th><th class="p-4 text-center">Durum</th><th class="p-4 text-right pr-6">İşlem</th></tr>
                             </thead>
-                            <tbody class="divide-y divide-slate-50 text-sm">
-                                {% for i in izinler %}
-                                    {% set ilgili_personel = None %}
-                                    {% for p in personeller if p.id == i.personel_id %}
-                                        {% set ilgili_personel = p %}
-                                    {% endfor %}
-                                
-                                <tr class="hover:bg-slate-50/50 transition izin-row" data-isim="{{ i.ad_soyad }}">
-                                    <td class="p-4 pl-6">
-                                        <span class="font-black text-slate-800 block">{{ i.ad_soyad }}</span>
-                                        {% if ilgili_personel %}
-                                        <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mt-0.5">
-                                            Yıllık Bakiye: <b class="text-indigo-500">{{ ilgili_personel.kalan_izin }} Gün Kaldı</b> (Toplam {{ ilgili_personel.izin_hakki }})
-                                        </span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="p-4 text-center text-slate-500 font-bold text-xs">{{ i.baslangic_tarihi }} <span class="text-slate-300 mx-1">➔</span> {{ i.bitis_tarihi }}</td>
+                            <tbody class="divide-y divide-slate-50 text-sm font-bold">
+                                {% for i in tum_izinler %}
+                                <tr class="hover:bg-slate-50/50 transition arsiv-row" data-isim="{{ i.ad_soyad }}">
+                                    <td class="p-4 pl-6 text-slate-800">{{ i.ad_soyad }} <span class="block text-[9px] text-slate-400 uppercase tracking-widest mt-0.5">{{ i.izin_turu }}</span></td>
+                                    <td class="p-4 text-center text-slate-500 text-xs">{{ i.baslangic_tarihi }} ➔ {{ i.bitis_tarihi }}</td>
                                     <td class="p-4 text-center">
-                                        <span class="bg-slate-100 text-slate-600 font-black px-2 py-1 rounded-md text-[9px] uppercase tracking-widest border border-slate-200">{{ i.izin_turu }}</span>
-                                    </td>
-                                    <td class="p-4 text-right pr-6 flex items-center justify-end gap-2 h-full">
                                         {% if bugun >= i.baslangic_tarihi and bugun <= i.bitis_tarihi %}
-                                            <span class="text-purple-600 text-[10px] font-black uppercase tracking-widest animate-pulse border border-purple-100 bg-purple-50 px-2 py-1 rounded-md mr-1">İzinde</span>
-                                            
-                                            <form action="/personel" method="POST" class="m-0" onsubmit="return confirm('Bu personelin izni DÜN itibarıyla sonlandırılacak ve BUGÜN işbaşı yapmış sayılacak. Onaylıyor musunuz?');">
-                                                <input type="hidden" name="islem_tipi" value="izin_erken_bitir">
-                                                <input type="hidden" name="izin_id" value="{{ i.id }}">
-                                                <button type="submit" class="bg-white border border-slate-200 hover:border-emerald-300 hover:text-emerald-600 hover:bg-emerald-50 text-slate-400 p-2 rounded-xl transition-all shadow-sm" title="Erken Döndü (İşe Başladı)">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/></svg>
-                                                </button>
-                                            </form>
-
+                                            <span class="text-purple-600 text-[9px] uppercase tracking-widest border border-purple-100 bg-purple-50 px-2 py-1 rounded">Aktif İzinde</span>
                                         {% elif bugun < i.baslangic_tarihi %}
-                                            <span class="text-indigo-500 text-[10px] font-black uppercase tracking-widest border border-indigo-100 bg-indigo-50 px-2 py-1 rounded-md mr-1">Gelecek</span>
+                                            <span class="text-indigo-500 text-[9px] uppercase tracking-widest border border-indigo-100 bg-indigo-50 px-2 py-1 rounded">Gelecek</span>
                                         {% else %}
-                                            <span class="text-slate-400 text-[10px] font-black uppercase tracking-widest mr-1">Geçmiş</span>
+                                            <span class="text-slate-400 text-[9px] uppercase tracking-widest bg-slate-100 px-2 py-1 rounded">Tamamlandı</span>
                                         {% endif %}
-                                        
-                                        <form action="/personel" method="POST" class="m-0" onsubmit="return confirm('DİKKAT! Bu izin kaydını tamamen SİLMEK istiyorsunuz (Yanlış veya mükerrer girilen kayıtlar için). Emin misiniz?');">
-                                            <input type="hidden" name="islem_tipi" value="izin_iptal">
-                                            <input type="hidden" name="izin_id" value="{{ i.id }}">
-                                            <button type="submit" class="bg-white border border-slate-200 hover:border-rose-300 hover:text-rose-600 hover:bg-rose-50 text-slate-400 p-2 rounded-xl transition-all shadow-sm" title="İzni Komple Sil (İptal Et)">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                                            </button>
+                                    </td>
+                                    <td class="p-4 text-right pr-6 flex items-center justify-end gap-2">
+                                        {% if bugun >= i.baslangic_tarihi and bugun <= i.bitis_tarihi %}
+                                        <form action="/personel" method="POST" class="m-0" onsubmit="return confirm('Dün itibariyle sonlandırılacak. Emin misiniz?');">
+                                            <input type="hidden" name="islem_tipi" value="izin_erken_bitir"><input type="hidden" name="izin_id" value="{{ i.id }}">
+                                            <button type="submit" class="bg-emerald-50 hover:bg-emerald-500 text-emerald-600 hover:text-white px-2 py-1.5 rounded-lg text-[9px] uppercase tracking-widest transition border border-emerald-100">İşe Döndü</button>
+                                        </form>
+                                        {% endif %}
+                                        <form action="/personel" method="POST" class="m-0" onsubmit="return confirm('Komple silinecek. Emin misiniz?');">
+                                            <input type="hidden" name="islem_tipi" value="izin_iptal"><input type="hidden" name="izin_id" value="{{ i.id }}">
+                                            <button type="submit" class="bg-rose-50 hover:bg-rose-500 text-rose-500 hover:text-white px-2 py-1.5 rounded-lg text-[9px] uppercase tracking-widest transition border border-rose-100">Sil</button>
                                         </form>
                                     </td>
                                 </tr>
                                 {% else %}
-                                <tr><td colspan="4" class="p-10 text-center text-slate-400 font-bold text-xs uppercase tracking-widest">Kayıtlı izin bulunmuyor.</td></tr>
+                                <tr><td colspan="4" class="p-8 text-center text-slate-400 font-bold text-xs uppercase tracking-widest">Arşivde kayıt yok.</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
                 </div>
+            </div>
+        </div>
 
+        <div id="tab-personel" class="tab-content hidden w-full grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <div class="lg:col-span-3 space-y-6">
+                <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200">
+                    <h3 class="font-black text-slate-800 mb-5 text-sm uppercase tracking-widest">➕ Yeni Personel Kaydı</h3>
+                    <form action="/personel" method="POST" class="space-y-4">
+                        <input type="hidden" name="islem_tipi" value="personel_ekle">
+                        <input type="text" name="ad_soyad" placeholder="Ad Soyad" required class="w-full border-2 border-slate-100 p-3 rounded-xl text-xs font-bold bg-slate-50 outline-none focus:border-indigo-400">
+                        <input type="text" name="sicil_no" placeholder="Sicil No" required class="w-full border-2 border-slate-100 p-3 rounded-xl text-xs font-bold bg-slate-50 outline-none focus:border-indigo-400">
+                        <input type="text" name="gorev" placeholder="Görevi (Aşçıbaşı vb.)" class="w-full border-2 border-slate-100 p-3 rounded-xl text-xs font-bold bg-slate-50 outline-none focus:border-indigo-400">
+                        <div class="flex gap-2">
+                            <input type="time" name="mesai_baslangic" value="08:00" class="w-full border-2 border-slate-100 p-2.5 rounded-xl text-xs font-bold bg-slate-50 outline-none focus:border-indigo-400">
+                            <input type="time" name="mesai_bitis" value="17:00" class="w-full border-2 border-slate-100 p-2.5 rounded-xl text-xs font-bold bg-slate-50 outline-none focus:border-indigo-400">
+                        </div>
+                        <button type="submit" class="w-full bg-slate-800 text-white font-black py-3.5 rounded-xl text-[10px] uppercase tracking-widest hover:bg-black transition shadow-sm mt-2">Kaydet</button>
+                    </form>
+                </div>
+                
+                <div class="bg-emerald-50 p-6 rounded-[2rem] border border-emerald-100">
+                    <h4 class="font-black text-emerald-800 mb-2 text-sm uppercase tracking-widest">Excel'den Yükle</h4>
+                    <p class="text-[9px] font-bold text-emerald-600 uppercase tracking-widest mb-4">Sütunlar: ad_soyad, sicil_no, gorev</p>
+                    <form action="/personel-import" method="POST" enctype="multipart/form-data" class="space-y-3">
+                        <input type="file" name="file" accept=".xlsx, .csv" required class="w-full text-[10px] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-[9px] file:uppercase file:tracking-widest file:font-black file:bg-emerald-600 file:text-white cursor-pointer text-emerald-700">
+                        <button type="submit" class="w-full bg-white border border-emerald-200 text-emerald-700 font-black py-3 rounded-xl text-[10px] uppercase tracking-widest hover:border-emerald-400 shadow-sm transition">İçeri Aktar</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="lg:col-span-9 bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden flex flex-col h-max max-h-[800px]">
+                <div class="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-50">
+                    <h3 class="font-black text-slate-800 text-base uppercase tracking-widest">Kayıtlı Tüm Personel Listesi</h3>
+                    <input type="text" id="personelArama" onkeyup="filterTable('personelArama', 'per-row', 'data-isim')" placeholder="İsimle veya görevle ara..." class="border-2 border-slate-100 px-4 py-2.5 rounded-xl text-xs font-bold bg-white outline-none focus:border-indigo-400 transition shadow-inner w-full sm:w-64">
+                </div>
+                <div class="overflow-x-auto custom-scrollbar flex-1">
+                    <table class="w-full text-left whitespace-nowrap">
+                        <thead class="bg-white text-slate-400 uppercase text-[9px] tracking-widest border-b border-slate-100 sticky top-0 z-10">
+                            <tr><th class="p-5 pl-6">Ad Soyad</th><th class="p-5">Görev / Sicil</th><th class="p-5 text-center">İzin Bakiyesi</th><th class="p-5 text-center">Son Vukuat (Devamsızlık)</th><th class="p-5 text-right pr-6">Detay & Ayarlar</th></tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-50 text-sm font-bold">
+                            {% for p in personeller %}
+                            <tr class="hover:bg-slate-50/50 transition per-row" data-isim="{{ p.ad_soyad }} {{ p.gorev }}">
+                                <td class="p-5 pl-6 text-slate-800">{{ p.ad_soyad }}</td>
+                                <td class="p-5">
+                                    <span class="block text-slate-600">{{ p.gorev }}</span>
+                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mt-0.5">Sicil: {{ p.sicil_no }} | Mesai: {{ p.mesai_baslangic }}-{{ p.mesai_bitis }}</span>
+                                </td>
+                                <td class="p-5 text-center">
+                                    <form action="/personel" method="POST" class="flex justify-center items-center gap-1">
+                                        <input type="hidden" name="islem_tipi" value="izin_hakki_guncelle"><input type="hidden" name="personel_id" value="{{ p.id }}">
+                                        <input type="number" name="izin_hakki" value="{{ p.izin_hakki }}" class="w-12 border border-slate-200 text-center rounded bg-slate-50 text-xs py-1 outline-none focus:border-indigo-400" title="Toplam Hakkı Değiştir">
+                                        <span class="bg-indigo-50 text-indigo-600 border border-indigo-100 px-2 py-1 rounded text-[10px] uppercase tracking-widest ml-1">{{ p.kalan_izin }} Gün Kaldı</span>
+                                        <button type="submit" class="hidden"></button>
+                                    </form>
+                                </td>
+                                <td class="p-5 text-center">
+                                    {% if p.son_vukuat != '-' %}
+                                        <span class="inline-block px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border shadow-sm
+                                            {% if p.son_vukuat_durum == 'Gelmedi' %}bg-rose-50 text-rose-600 border-rose-100
+                                            {% else %}bg-orange-50 text-orange-600 border-orange-100{% endif %}">
+                                            {{ p.son_vukuat }}
+                                        </span>
+                                    {% else %}
+                                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Kayıt Yok</span>
+                                    {% endif %}
+                                </td>
+                                <td class="p-5 text-right pr-6 flex justify-end gap-2">
+                                    <button onclick="openPersonelModal('{{ {'ad': p.ad_soyad, 'gorev': p.gorev, 'kalan': p.kalan_izin, 'son_bas': p.son_izin_bas, 'son_bit': p.son_izin_bit, 'gecmis': p.son_yoklamalar}|tojson|forceescape }}')" class="bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 text-slate-500 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition shadow-sm">Karnesi</button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
     </div>
+
+    <div id="personelModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-all">
+        <div class="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden relative border border-slate-100 transform transition-transform">
+            <button onclick="closePersonelModal()" class="absolute top-4 right-4 bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white w-8 h-8 rounded-full font-black text-xs transition flex items-center justify-center border border-rose-100 shadow-sm">✕</button>
+            
+            <div class="bg-slate-50 p-8 text-center border-b border-slate-100">
+                <div class="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-3 shadow-inner border border-indigo-200">👤</div>
+                <h3 id="m-isim" class="text-2xl font-black text-slate-800 tracking-tight">İsim Soyisim</h3>
+                <p id="m-gorev" class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Görevi</p>
+            </div>
+
+            <div class="p-8 space-y-6">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl text-center shadow-sm">
+                        <span class="block text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Kalan İzin Hakkı</span>
+                        <span id="m-kalan-izin" class="text-xl font-black text-indigo-700">0 Gün</span>
+                    </div>
+                    <div class="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-center shadow-sm">
+                        <span class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Son Çıktığı İzin</span>
+                        <span id="m-son-izin" class="text-[10px] font-black text-slate-700">-</span>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2 border-b border-slate-100 pb-2"><span>🕒</span> Son 5 Günlük Yoklama Geçmişi</h4>
+                    <div id="m-yoklama-gecmis" class="space-y-1">
+                        </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>

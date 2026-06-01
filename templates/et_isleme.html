@@ -143,23 +143,27 @@
                             <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                                 <span>🔍</span> Bu Karkastan Bugüne Kadar Elde Edilen Kümülatif Ürünler
                             </h4>
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Kuşbaşı Toplamı</span>
-                                    <span class="block text-2xl font-black text-gray-800 mt-1">{{ karne.kusbasi }} <small class="text-xs">KG</small></span>
-                                </div>
+                            <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
                                 <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
                                     <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Kıyma Toplamı</span>
                                     <span class="block text-2xl font-black text-gray-800 mt-1">{{ karne.kiyma }} <small class="text-xs">KG</small></span>
                                 </div>
                                 <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sotelik Toplamı</span>
-                                    <span class="block text-2xl font-black text-gray-800 mt-1">{{ karne.sote }} <small class="text-xs">KG</small></span>
+                                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Kuşbaşı Toplamı</span>
+                                    <span class="block text-2xl font-black text-gray-800 mt-1">{{ karne.kusbasi }} <small class="text-xs">KG</small></span>
+                                </div>
+                                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Kemikli Et Toplamı</span>
+                                    <span class="block text-2xl font-black text-gray-800 mt-1">{{ karne.kemikli }} <small class="text-xs">KG</small></span>
+                                </div>
+                                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Kemik Toplamı</span>
+                                    <span class="block text-2xl font-black text-gray-800 mt-1">{{ karne.kemik }} <small class="text-xs">KG</small></span>
                                 </div>
                                 <div class="bg-rose-50 p-4 rounded-xl border border-rose-100 relative overflow-hidden">
-                                    <span class="text-[10px] font-bold text-rose-400 uppercase tracking-widest relative z-10">Kemik / Fire</span>
-                                    <span class="block text-2xl font-black text-rose-600 mt-1 relative z-10">{{ karne.kemik }} <small class="text-xs">KG</small></span>
-                                    <span class="absolute -bottom-2 -right-2 text-5xl font-black text-rose-500 opacity-10">%{{ karne.fire_oran }}</span>
+                                    <span class="text-[10px] font-bold text-rose-400 uppercase tracking-widest relative z-10">Çöp / Fire</span>
+                                    <span class="block text-2xl font-black text-rose-600 mt-1 relative z-10">{{ karne.fire }} <small class="text-xs">KG</small></span>
+                                    <span class="absolute -bottom-2 -right-2 text-4xl font-black text-rose-500 opacity-10">%{{ karne.fire_oran }}</span>
                                 </div>
                             </div>
                         </div>
@@ -222,7 +226,7 @@
     </div>
 
     <div id="etModal" class="hidden fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center z-50 p-4 transition-all duration-300 opacity-0">
-        <div class="bg-white rounded-[3rem] shadow-2xl w-full max-w-4xl overflow-hidden transform scale-95 transition-all duration-300" id="etModalBox">
+        <div class="bg-white rounded-[3rem] shadow-2xl w-full max-w-5xl overflow-hidden transform scale-95 transition-all duration-300" id="etModalBox">
             
             <div class="bg-gray-800 p-6 flex justify-between items-center">
                 <div class="flex items-center gap-3">
@@ -233,15 +237,15 @@
             </div>
             
             <form action="/et-isleme" method="POST" class="p-10 space-y-8">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
                     
-                    <div class="space-y-6">
+                    <div class="space-y-6 lg:col-span-5">
                         <div class="flex items-center gap-2 mb-2">
                             <span class="w-6 h-6 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center text-xs font-black">1</span>
                             <label class="text-xs font-black text-rose-500 uppercase tracking-widest">Kaynak Karkas (Lot Seçimi)</label>
                         </div>
                         <div class="space-y-4">
-                            <select name="kaynak_lot_id" id="kaynakSecici" required class="w-full border-2 border-rose-100 p-5 rounded-2xl font-bold outline-none focus:border-rose-400 bg-rose-50/50 transition shadow-inner text-sm text-gray-800">
+                            <select name="kaynak_lot_id" id="kaynakSecici" required class="w-full border-2 border-rose-100 p-5 rounded-2xl font-bold outline-none focus:border-rose-400 bg-rose-50/50 transition shadow-inner text-sm text-gray-800 cursor-pointer">
                                 <option value="">İşlenecek Damgalı Eti Seçin...</option>
                                 {% for et in et_stoklari %}
                                 <option value="{{ et.id }}" data-kalan="{{ et.kalan_miktar }}">
@@ -251,7 +255,7 @@
                             </select>
                             
                             <div class="relative mt-2">
-                                <label class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-2">İşlenecek Miktar</label>
+                                <label class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-2">Parçalanacak (Harcanan) Miktar</label>
                                 <input type="number" step="0.01" id="harcanan" name="harcanan_miktar" placeholder="0.00" required class="w-full border-2 border-gray-100 p-6 rounded-3xl text-gray-800 font-black text-4xl text-center outline-none focus:border-rose-400 bg-gray-50 shadow-inner transition" oninput="hesapla()">
                                 <span class="absolute bottom-6 right-6 text-gray-300 font-black text-xl">KG</span>
                             </div>
@@ -259,39 +263,44 @@
                         </div>
                     </div>
                     
-                    <div class="space-y-6">
+                    <div class="space-y-6 lg:col-span-7">
                         <div class="flex items-center gap-2 mb-2">
                             <span class="w-6 h-6 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-xs font-black">2</span>
-                            <label class="text-xs font-black text-gray-400 uppercase tracking-widest">Ürünler (Çıkan)</label>
+                            <label class="text-xs font-black text-gray-400 uppercase tracking-widest">Elde Edilen Ürünler (Çıkan)</label>
                         </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100 focus-within:border-rose-300 transition">
-                                <span class="text-[10px] font-black text-gray-400 block mb-1 uppercase">Dana Kıyma</span>
-                                <input type="number" step="0.01" name="kiymalik" placeholder="0.00" class="cikan-input w-full bg-transparent font-black text-xl outline-none text-gray-700" oninput="hesapla()">
+                        
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100 focus-within:border-rose-300 transition shadow-sm">
+                                <span class="text-[10px] font-black text-gray-400 block mb-1 uppercase tracking-widest">Dana Kıyma</span>
+                                <input type="number" step="0.01" name="kiymalik" placeholder="0.00" class="cikan-input w-full bg-transparent font-black text-xl outline-none text-gray-800" oninput="hesapla()">
                             </div>
-                            <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100 focus-within:border-rose-300 transition">
-                                <span class="text-[10px] font-black text-gray-400 block mb-1 uppercase">Dana Kuşbaşı</span>
-                                <input type="number" step="0.01" name="kusbasi" placeholder="0.00" class="cikan-input w-full bg-transparent font-black text-xl outline-none text-gray-700" oninput="hesapla()">
+                            <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100 focus-within:border-rose-300 transition shadow-sm">
+                                <span class="text-[10px] font-black text-gray-400 block mb-1 uppercase tracking-widest">Dana Kuşbaşı</span>
+                                <input type="number" step="0.01" name="kusbasi" placeholder="0.00" class="cikan-input w-full bg-transparent font-black text-xl outline-none text-gray-800" oninput="hesapla()">
                             </div>
-                            <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100 focus-within:border-rose-300 transition">
-                                <span class="text-[10px] font-black text-gray-400 block mb-1 uppercase">Dana Sote</span>
-                                <input type="number" step="0.01" name="sotelik" placeholder="0.00" class="cikan-input w-full bg-transparent font-black text-xl outline-none text-gray-700" oninput="hesapla()">
+                            <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100 focus-within:border-rose-300 transition shadow-sm">
+                                <span class="text-[10px] font-black text-gray-400 block mb-1 uppercase tracking-widest">Kemikli Et</span>
+                                <input type="number" step="0.01" name="kemikli" placeholder="0.00" class="cikan-input w-full bg-transparent font-black text-xl outline-none text-gray-800" oninput="hesapla()">
                             </div>
-                            <div class="bg-rose-50 p-4 rounded-2xl border border-rose-100 focus-within:border-rose-300 transition">
-                                <span class="text-[10px] font-black text-rose-400 block mb-1 uppercase">Kemik & Fire</span>
-                                <input type="number" step="0.01" name="kemik" placeholder="0.00" class="cikan-input w-full bg-transparent font-black text-xl outline-none text-rose-700" oninput="hesapla()">
+                            <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100 focus-within:border-rose-300 transition shadow-sm">
+                                <span class="text-[10px] font-black text-gray-400 block mb-1 uppercase tracking-widest" title="Sadece Kemik (Kemik suyu vs için)">Temiz Kemik</span>
+                                <input type="number" step="0.01" name="kemik" placeholder="0.00" class="cikan-input w-full bg-transparent font-black text-xl outline-none text-gray-800" oninput="hesapla()">
+                            </div>
+                            <div class="bg-rose-50 p-4 rounded-2xl border border-rose-100 focus-within:border-rose-300 transition shadow-sm md:col-span-2">
+                                <span class="text-[10px] font-black text-rose-500 block mb-1 uppercase tracking-widest">Çöp / Fire (Depoya Girmez)</span>
+                                <input type="number" step="0.01" name="fire" placeholder="0.00" class="cikan-input w-full bg-transparent font-black text-xl outline-none text-rose-700" oninput="hesapla()">
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="flex flex-col md:flex-row items-center justify-between pt-8 border-t border-gray-100 gap-6">
-                    <div class="text-center md:text-left">
-                        <span class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Hesaplanan Fark</span>
-                        <span id="fark" class="text-3xl font-black text-gray-800 tracking-tighter">0.00 KG</span>
+                    <div class="text-center md:text-left bg-gray-50 px-6 py-3 rounded-2xl border border-gray-100">
+                        <span class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Hesaplanan Fark (Harcanan - Toplam Çıkan)</span>
+                        <span id="fark" class="text-2xl font-black text-gray-800 tracking-tighter">0.00 KG</span>
                     </div>
                     <button type="submit" id="btnKaydet" class="w-full md:w-auto bg-gray-900 text-white font-black py-5 px-16 rounded-[2rem] hover:bg-black transition-all shadow-xl shadow-gray-200 text-sm tracking-widest uppercase active:scale-95">
-                        İşlemi Tamamla
+                        İşlemi Tamamla ve Stoklara İşle
                     </button>
                 </div>
             </form>
@@ -299,7 +308,6 @@
     </div>
 
     <script>
-        // Akordiyon Menü Zekası
         function toggleAccordion(id) {
             const panel = document.getElementById('panel-' + id);
             const btn = document.getElementById('btn-' + id);
@@ -310,7 +318,6 @@
                 btn.classList.remove('bg-rose-600');
                 btn.classList.add('bg-gray-700');
             } else {
-                // Diğer açık olanları kapat
                 document.querySelectorAll('.accordion-content.open').forEach(p => {
                     p.classList.remove('open');
                     const bId = p.id.replace('panel-', 'btn-');
@@ -388,7 +395,8 @@
             const m = document.getElementById('etModal');
             if (event.target == m) { closeEtModal(); }
         }
-        let lotOffset = 5; // İlk 5 tanesi zaten Python'dan geldi
+        
+        let lotOffset = 5;
 
         function dahaFazlaLotYukle() {
             const btn = document.getElementById('btnLotYukle');
@@ -435,11 +443,12 @@
                             </div>
                             
                             <div id="panel-${karne.id}" class="accordion-content bg-white rounded-b-2xl border-x border-b border-gray-200 shadow-inner -mt-4 mx-2">
-                                <div class="p-6 pt-10 grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-100"><span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Kuşbaşı Toplamı</span><span class="block text-2xl font-black text-gray-800 mt-1">${karne.kusbasi} <small class="text-xs">KG</small></span></div>
+                                <div class="p-6 pt-10 grid grid-cols-2 md:grid-cols-5 gap-4">
                                     <div class="bg-gray-50 p-4 rounded-xl border border-gray-100"><span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Kıyma Toplamı</span><span class="block text-2xl font-black text-gray-800 mt-1">${karne.kiyma} <small class="text-xs">KG</small></span></div>
-                                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-100"><span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sotelik Toplamı</span><span class="block text-2xl font-black text-gray-800 mt-1">${karne.sote} <small class="text-xs">KG</small></span></div>
-                                    <div class="bg-rose-50 p-4 rounded-xl border border-rose-100 relative overflow-hidden"><span class="text-[10px] font-bold text-rose-400 uppercase tracking-widest relative z-10">Kemik / Fire</span><span class="block text-2xl font-black text-rose-600 mt-1 relative z-10">${karne.kemik} <small class="text-xs">KG</small></span></div>
+                                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-100"><span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Kuşbaşı Toplamı</span><span class="block text-2xl font-black text-gray-800 mt-1">${karne.kusbasi} <small class="text-xs">KG</small></span></div>
+                                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-100"><span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Kemikli Et Toplamı</span><span class="block text-2xl font-black text-gray-800 mt-1">${karne.kemikli} <small class="text-xs">KG</small></span></div>
+                                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-100"><span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Kemik Toplamı</span><span class="block text-2xl font-black text-gray-800 mt-1">${karne.kemik} <small class="text-xs">KG</small></span></div>
+                                    <div class="bg-rose-50 p-4 rounded-xl border border-rose-100 relative overflow-hidden"><span class="text-[10px] font-bold text-rose-400 uppercase tracking-widest relative z-10">Çöp / Fire</span><span class="block text-2xl font-black text-rose-600 mt-1 relative z-10">${karne.fire} <small class="text-xs">KG</small></span></div>
                                 </div>
                             </div>
                         </div>`;
