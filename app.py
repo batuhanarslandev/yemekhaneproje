@@ -1707,8 +1707,8 @@ def personel():
                          (ad_soyad, request.form['sicil_no'], request.form['gorev'], request.form['mesai_baslangic'], request.form['mesai_bitis']))
             p_id = cursor.lastrowid
             
-            # --- YENİ: EKSİK EVRAK (İHTAR) KONTROLÜ ---
-            hijyen_var_mi = request.form.get('hijyen_belgesi') # İşaretliyse 'on' gelir
+            # --- EKSİK EVRAK (İHTAR) KONTROLÜ VE AJANDA ENTEGRASYONU ---
+            hijyen_var_mi = request.form.get('hijyen_belgesi') 
             portor_var_mi = request.form.get('portor_muayenesi')
             
             son_tarih = (date.today() + timedelta(days=7)).strftime('%Y-%m-%d')
@@ -1716,19 +1716,38 @@ def personel():
             if not hijyen_var_mi:
                 conn.execute("INSERT INTO personel_ihtarlar (personel_id, baslik, aciklama, olusturma_tarihi, son_tarih, durum) VALUES (?,?,?,?,?,?)",
                              (p_id, "Eksik Evrak: Hijyen Belgesi", f"{ad_soyad} işe başladı ancak Hijyen Belgesi eksik.", bugun, son_tarih, "Bekliyor"))
+                # Ajandaya Kırmızı Uyarı Ekle
+                conn.execute("INSERT INTO ajanda (tarih, not_icerik, renk_kodu, url, bitis_tarihi, periyot) VALUES (?,?,?,?,?,?)",
+                             (son_tarih, f"⚠️ SON GÜN: {ad_soyad} - Hijyen Belgesi", '#e11d48', '/personel', '', 'Tek Seferlik'))
             
             if not portor_var_mi:
                 conn.execute("INSERT INTO personel_ihtarlar (personel_id, baslik, aciklama, olusturma_tarihi, son_tarih, durum) VALUES (?,?,?,?,?,?)",
                              (p_id, "Eksik Evrak: Portör Muayenesi", f"{ad_soyad} işe başladı ancak Portör Muayenesi eksik.", bugun, son_tarih, "Bekliyor"))
+                # Ajandaya Kırmızı Uyarı Ekle
+                conn.execute("INSERT INTO ajanda (tarih, not_icerik, renk_kodu, url, bitis_tarihi, periyot) VALUES (?,?,?,?,?,?)",
+                             (son_tarih, f"⚠️ SON GÜN: {ad_soyad} - Portör Muayenesi", '#e11d48', '/personel', '', 'Tek Seferlik'))
 
-            conn.commit(); flash("Personel eklendi. Eksik evraklar varsa İhtarlar sekmesine düşürüldü.", "success")
+            conn.commit(); flash("Personel eklendi. Eksik evraklar varsa İhtarlar ve Ajanda sekmesine düşürüldü.", "success")
 
-        # --- YENİ: İHTAR (EVRAK) TAMAMLAMA İŞLEMİ ---
+        # --- İHTAR (EVRAK) TAMAMLAMA İŞLEMİ VE AJANDA GÜNCELLEMESİ ---
         elif islem == 'ihtar_tamamla':
             ihtar_id = request.form['ihtar_id']
-            conn.execute("UPDATE personel_ihtarlar SET durum='Tamamlandı' WHERE id=?", (ihtar_id,))
-            conn.commit(); flash("Eksik evrak teslim alındı ve ihtar kapatıldı.", "success")
+            ihtar = conn.execute("SELECT * FROM personel_ihtarlar WHERE id=?", (ihtar_id,)).fetchone()
             
+            if ihtar:
+                p = conn.execute("SELECT ad_soyad FROM personeller WHERE id=?", (ihtar['personel_id'],)).fetchone()
+                if p:
+                    belge_turu = ihtar['baslik'].split(': ')[1]
+                    not_icerik_arama = f"⚠️ SON GÜN: {p['ad_soyad']} - {belge_turu}"
+                    
+                    # Ajandadaki uyarıyı bul ve başarıyla (Yeşil) tamamlandığını yaz
+                    ajanda_kayit = conn.execute("SELECT id FROM ajanda WHERE not_icerik=?", (not_icerik_arama,)).fetchone()
+                    if ajanda_kayit:
+                        conn.execute("UPDATE ajanda SET not_icerik=?, renk_kodu='#10b981' WHERE id=?", 
+                                     (f"✅ TESLİM EDİLDİ: {p['ad_soyad']} - {belge_turu}", ajanda_kayit['id']))
+            
+            conn.execute("UPDATE personel_ihtarlar SET durum='Tamamlandı' WHERE id=?", (ihtar_id,))
+            conn.commit(); flash("Eksik evrak teslim alındı. İhtar ve Ajanda kaydı güncellendi.", "success")
         elif islem == 'ihtar_sil':
             ihtar_id = request.form['ihtar_id']
             conn.execute("DELETE FROM personel_ihtarlar WHERE id=?", (ihtar_id,))
