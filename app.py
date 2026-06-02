@@ -1681,16 +1681,58 @@ def uretim_fire_ekle():
 def personel():
     conn = get_db_connection()
     bugun = date.today().strftime('%Y-%m-%d')
-    # YENİ: URL'den gelen tarihi okur, yoksa bugünü varsayar
     secilen_tarih = request.args.get('tarih', bugun)
+
+    # --- YENİ: İHTAR VE EVRAK TAKİP TABLOSUNU OLUŞTUR ---
+    try:
+        conn.execute('''CREATE TABLE IF NOT EXISTS personel_ihtarlar (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            personel_id INTEGER,
+            baslik TEXT,
+            aciklama TEXT,
+            olusturma_tarihi TEXT,
+            son_tarih TEXT,
+            durum TEXT
+        )''')
+        conn.commit()
+    except: pass
 
     if request.method == 'POST':
         islem = request.form.get('islem_tipi')
 
         if islem == 'personel_ekle':
-            conn.execute("INSERT INTO personeller (ad_soyad, sicil_no, gorev, mesai_baslangic, mesai_bitis) VALUES (?,?,?,?,?)",
-                         (request.form['ad_soyad'], request.form['sicil_no'], request.form['gorev'], request.form['mesai_baslangic'], request.form['mesai_bitis']))
-            conn.commit(); flash("Personel başarıyla eklendi.", "success")
+            ad_soyad = request.form['ad_soyad']
+            # Personeli ekle ve eklenen ID'yi al
+            cursor = conn.execute("INSERT INTO personeller (ad_soyad, sicil_no, gorev, mesai_baslangic, mesai_bitis) VALUES (?,?,?,?,?)",
+                         (ad_soyad, request.form['sicil_no'], request.form['gorev'], request.form['mesai_baslangic'], request.form['mesai_bitis']))
+            p_id = cursor.lastrowid
+            
+            # --- YENİ: EKSİK EVRAK (İHTAR) KONTROLÜ ---
+            hijyen_var_mi = request.form.get('hijyen_belgesi') # İşaretliyse 'on' gelir
+            portor_var_mi = request.form.get('portor_muayenesi')
+            
+            son_tarih = (date.today() + timedelta(days=7)).strftime('%Y-%m-%d')
+            
+            if not hijyen_var_mi:
+                conn.execute("INSERT INTO personel_ihtarlar (personel_id, baslik, aciklama, olusturma_tarihi, son_tarih, durum) VALUES (?,?,?,?,?,?)",
+                             (p_id, "Eksik Evrak: Hijyen Belgesi", f"{ad_soyad} işe başladı ancak Hijyen Belgesi eksik.", bugun, son_tarih, "Bekliyor"))
+            
+            if not portor_var_mi:
+                conn.execute("INSERT INTO personel_ihtarlar (personel_id, baslik, aciklama, olusturma_tarihi, son_tarih, durum) VALUES (?,?,?,?,?,?)",
+                             (p_id, "Eksik Evrak: Portör Muayenesi", f"{ad_soyad} işe başladı ancak Portör Muayenesi eksik.", bugun, son_tarih, "Bekliyor"))
+
+            conn.commit(); flash("Personel eklendi. Eksik evraklar varsa İhtarlar sekmesine düşürüldü.", "success")
+
+        # --- YENİ: İHTAR (EVRAK) TAMAMLAMA İŞLEMİ ---
+        elif islem == 'ihtar_tamamla':
+            ihtar_id = request.form['ihtar_id']
+            conn.execute("UPDATE personel_ihtarlar SET durum='Tamamlandı' WHERE id=?", (ihtar_id,))
+            conn.commit(); flash("Eksik evrak teslim alındı ve ihtar kapatıldı.", "success")
+            
+        elif islem == 'ihtar_sil':
+            ihtar_id = request.form['ihtar_id']
+            conn.execute("DELETE FROM personel_ihtarlar WHERE id=?", (ihtar_id,))
+            conn.commit(); flash("İhtar kaydı sistemden tamamen silindi.", "success")
 
         elif islem == 'personel_sil':
             p_id = request.form['personel_id']
@@ -1723,7 +1765,7 @@ def personel():
             conn.commit(); flash("Personel izin bakiyesi güncellendi.", "success")
 
         elif islem == 'yoklama_kaydet':
-            islem_tarihi = request.form.get('islem_tarihi', bugun) # YENİ: Geçmiş tarihi yakala
+            islem_tarihi = request.form.get('islem_tarihi', bugun)
             personel_idler = request.form.getlist('personel_id[]')
             durumlar = request.form.getlist('durum[]')
             
@@ -1732,21 +1774,17 @@ def personel():
                 conn.execute("INSERT INTO pdks_log (tarih, personel_id, durum) VALUES (?,?,?)", (islem_tarihi, pid, dur))
             conn.commit()
             flash(f"✅ {islem_tarihi} tarihli yoklama başarıyla kaydedildi.", "success")
-            # Kaydettikten sonra o günün ekranında kalması için:
             return redirect(url_for('personel', tarih=islem_tarihi))
 
         return redirect(url_for('personel', tarih=secilen_tarih))
 
-    # AKTİF PERSONEL VE İZİN HESAPLAMALARI
     personeller_raw = conn.execute("SELECT * FROM personeller WHERE durum='Aktif' ORDER BY ad_soyad").fetchall()
     personeller = []
     from datetime import datetime
     
-    # 1. Dashboard ve İzin sekmesi için BUGÜNKÜ izinliler
     bugun_izinliler_db = conn.execute("SELECT personel_id FROM personel_izinler WHERE baslangic_tarihi <= ? AND bitis_tarihi >= ?", (bugun, bugun)).fetchall()
     izinli_idler = [i['personel_id'] for i in bugun_izinliler_db]
 
-    # 2. YENİ: Yoklama tablosu için SEÇİLEN TARİHTEKİ izinliler (Geçmişe dönük izinde miydi kontrolü)
     secilen_tarih_izinliler = conn.execute("SELECT personel_id FROM personel_izinler WHERE baslangic_tarihi <= ? AND bitis_tarihi >= ?", (secilen_tarih, secilen_tarih)).fetchall()
     secilen_izinli_idler = [i['personel_id'] for i in secilen_tarih_izinliler]
     
@@ -1770,7 +1808,6 @@ def personel():
         p_dict['son_izin_bas'] = son_izin['baslangic_tarihi'] if son_izin else '-'
         p_dict['son_izin_bit'] = son_izin['bitis_tarihi'] if son_izin else '-'
 
-        # YENİ: VUKUAT SORGUSU (En son ne zaman işe gelmedi veya geç kaldı?)
         vukuat = conn.execute("SELECT tarih, durum FROM pdks_log WHERE personel_id=? AND durum IN ('Gelmedi', 'Geç Geldi') ORDER BY tarih DESC LIMIT 1", (p['id'],)).fetchone()
         if vukuat:
             p_dict['son_vukuat'] = f"{vukuat['tarih']} ({vukuat['durum']})"
@@ -1779,27 +1816,26 @@ def personel():
             p_dict['son_vukuat'] = "-"
             p_dict['son_vukuat_durum'] = ""
 
-        # Karnedeki tablo için son 5 hareket
         son_yoklamalar = conn.execute("SELECT tarih, durum FROM pdks_log WHERE personel_id=? AND tarih <= ? ORDER BY tarih DESC LIMIT 5", (p['id'], bugun)).fetchall()
         p_dict['son_yoklamalar'] = [dict(y) for y in son_yoklamalar]
 
         personeller.append(p_dict)
 
-    # Seçilen Tarihteki Yoklama Kayıtlarını Çek
     bugunku_yoklama_db = conn.execute("SELECT personel_id, durum FROM pdks_log WHERE tarih=?", (secilen_tarih,)).fetchall()
     yoklama_dict = {y['personel_id']: y['durum'] for y in bugunku_yoklama_db}
 
-    # YENİ EKLENEN: Üst metrikler (Kartlar) için o günün anlık hesaplaması
     gec_kalan_sayisi = sum(1 for v in yoklama_dict.values() if v == 'Geç Geldi')
     gelmeyen_sayisi = sum(1 for v in yoklama_dict.values() if v == 'Gelmedi')
 
     bugunku_izinler_detay = conn.execute('''SELECT i.*, p.ad_soyad, p.gorev FROM personel_izinler i JOIN personeller p ON i.personel_id = p.id WHERE i.baslangic_tarihi <= ? AND i.bitis_tarihi >= ? ORDER BY p.ad_soyad''', (bugun, bugun)).fetchall()
-
     tum_izinler = conn.execute('''SELECT i.*, p.ad_soyad FROM personel_izinler i JOIN personeller p ON i.personel_id = p.id ORDER BY i.baslangic_tarihi DESC LIMIT 50''').fetchall()
 
+    # --- YENİ: İHTARLAR LİSTESİNİ ÇEK ---
+    ihtarlar_raw = conn.execute('''SELECT i.*, p.ad_soyad, p.gorev FROM personel_ihtarlar i JOIN personeller p ON i.personel_id = p.id ORDER BY i.durum ASC, i.son_tarih ASC''').fetchall()
+    ihtarlar = [dict(row) for row in ihtarlar_raw]
+
     conn.close()
-    # render_template içine gec_kalan_sayisi ve gelmeyen_sayisi eklendi:
-    return render_template('personel.html', personeller=personeller, bugunku_izinler_detay=bugunku_izinler_detay, tum_izinler=tum_izinler, izinli_idler=izinli_idler, secilen_izinli_idler=secilen_izinli_idler, yoklama_dict=yoklama_dict, bugun=bugun, secilen_tarih=secilen_tarih, gec_kalan_sayisi=gec_kalan_sayisi, gelmeyen_sayisi=gelmeyen_sayisi)
+    return render_template('personel.html', personeller=personeller, bugunku_izinler_detay=bugunku_izinler_detay, tum_izinler=tum_izinler, izinli_idler=izinli_idler, secilen_izinli_idler=secilen_izinli_idler, yoklama_dict=yoklama_dict, bugun=bugun, secilen_tarih=secilen_tarih, gec_kalan_sayisi=gec_kalan_sayisi, gelmeyen_sayisi=gelmeyen_sayisi, ihtarlar=ihtarlar)
 
 @app.route('/api/urun-gecmisi/<int:urun_id>')
 @login_required
