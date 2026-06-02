@@ -536,10 +536,15 @@
                 <button onclick="closeStatusModal()" class="text-slate-400 hover:text-rose-500 transition text-xl">✕</button>
             </div>
             
-            <form action="/satis" method="POST" class="p-6 space-y-5">
+            <form action="/satis" method="POST" enctype="multipart/form-data" class="p-6 space-y-5">
                 <input type="hidden" name="islem_tipi" value="durum_guncelle">
                 <input type="hidden" name="satis_id" id="s-satis-id">
                 <input type="hidden" name="islem_tarihi" value="{{ secilen_tarih }}">
+
+                <div class="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100">
+                    <label class="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-2 flex items-center gap-2"><span>🧾</span> Dekont Yükle (İsteğe Bağlı)</label>
+                    <input type="file" name="dekont" accept=".pdf, .jpg, .jpeg, .png" class="w-full text-xs font-bold outline-none file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[9px] file:uppercase file:font-black file:bg-white file:text-indigo-600 file:shadow-sm hover:file:bg-indigo-50 cursor-pointer text-slate-500 transition">
+                </div>
 
                 <div>
                     <label class="block text-[10px] font-black text-emerald-500 uppercase mb-2">Kurumdan Tahsilat Durumu</label>

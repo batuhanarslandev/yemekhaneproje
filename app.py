@@ -1183,6 +1183,15 @@ def satis():
             t_dur = request.form.get('tahsilat_durumu')
             f_dur = request.form.get('firma_odeme_durumu')
 
+            # YENİ: Durum güncellenirken dekont da yüklendiyse onu yakala ve arşive ekle
+            dekont = request.files.get('dekont')
+            if dekont and dekont.filename:
+                filename = f"{int(time.time())}_{secure_filename(dekont.filename)}"
+                path = os.path.join('static/uploads/dekontlar', filename)
+                dekont.save(path)
+                dekont_yolu = f"/static/uploads/dekontlar/{filename}"
+                conn.execute("UPDATE dis_paydas_satis SET dekont_yolu=? WHERE id=?", (dekont_yolu, satis_id))
+
             if t_dur and f_dur:
                 conn.execute("UPDATE dis_paydas_satis SET tahsilat_durumu=?, firma_odeme_durumu=? WHERE id=?", (t_dur, f_dur, satis_id))
             else:
@@ -1190,7 +1199,8 @@ def satis():
                 yeni_durum = request.form.get('yeni_durum')
                 if hedef == 'tahsilat': conn.execute("UPDATE dis_paydas_satis SET tahsilat_durumu=? WHERE id=?", (yeni_durum, satis_id))
                 elif hedef == 'firma': conn.execute("UPDATE dis_paydas_satis SET firma_odeme_durumu=? WHERE id=?", (yeni_durum, satis_id))
-            conn.commit(); flash("Ödeme durumu güncellendi.", "success")
+            
+            conn.commit(); flash("✅ Ödeme durumu güncellendi.", "success")
 
         elif islem == 'dis_paydas_sil':
             conn.execute('DELETE FROM dis_paydas_satis WHERE id=?', (request.form['kayit_id'],)); conn.commit()
