@@ -9,13 +9,9 @@
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px;}
         .custom-scrollbar:hover::-webkit-scrollbar-thumb { background: #94a3b8; }
-        
-        @media (max-width: 768px) {
-            #main-content-area { margin-left: 0 !important; }
-        }
+        @media (max-width: 768px) { #main-content-area { margin-left: 0 !important; } }
     </style>
     <script>
-        // Akordiyon için (Günlük üretim detayı)
         function toggleDetails(id) {
             const el = document.getElementById('details-' + id);
             el.classList.toggle('hidden');
@@ -23,7 +19,6 @@
             if(icon) icon.classList.toggle('rotate-180');
         }
 
-        // Sekme (Tab) Değiştirme Zekası
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.tab-btn').forEach(el => {
@@ -36,18 +31,12 @@
             activeBtn.classList.add('bg-indigo-600', 'text-white', 'shadow-md');
         }
 
-        // Reçete Arama Zekası
         function searchRecipe() {
             let input = document.getElementById('recipeSearchInput').value.toLowerCase();
             let cards = document.querySelectorAll('.recipe-card');
-            
             cards.forEach(card => {
                 let title = card.getAttribute('data-yemek').toLowerCase();
-                if (title.includes(input)) {
-                    card.style.display = "block";
-                } else {
-                    card.style.display = "none";
-                }
+                card.style.display = title.includes(input) ? "block" : "none";
             });
         }
     </script>
@@ -64,12 +53,12 @@
             <div>
                 <h1 class="text-2xl md:text-3xl font-black tracking-tight text-slate-800 flex items-center gap-3">
                     <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-600"><path d="m2 22 5-5"/><path d="M2 13.5v-2c0-1.4 1.1-2.5 2.5-2.5h15c1.4 0 2.5 1.1 2.5 2.5v2c0 1.4-1.1 2.5-2.5 2.5h-15c-1.4 0-2.5-1.1-2.5-2.5z"/><path d="M12 9V3"/><path d="M12 3a2 2 0 0 0-2-2h-2"/><path d="M12 3a2 2 0 0 1 2-2h2"/></svg>
-                    Üretim & Reçete Merkezi
+                    Üretim & Porsiyon Merkezi
                 </h1>
-                <p class="text-slate-500 font-medium mt-2 text-sm">Günlük üretim durumunu kontrol edin ve standart reçeteleri yönetin.</p>
+                <p class="text-slate-500 font-medium mt-2 text-sm">Üretim bandı, reçeteler ve maliyet (porsiyon kaçağı) analizleri.</p>
             </div>
             
-            <form action="/uretim" method="GET" class="flex flex-wrap sm:flex-nowrap gap-2 bg-white p-2 rounded-2xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-200 w-full md:w-auto">
+            <form action="/uretim" method="GET" class="flex flex-wrap sm:flex-nowrap gap-2 bg-white p-2 rounded-2xl shadow-sm border border-slate-200 w-full md:w-auto">
                 <input type="date" name="tarih" value="{{ secilen_tarih }}" class="border border-slate-200 rounded-xl p-3 font-bold text-sm outline-none bg-slate-50 text-slate-700 focus:border-indigo-400 w-full sm:w-auto cursor-pointer" onchange="this.form.submit()">
                 
                 <select name="ogun" class="border border-indigo-100 rounded-xl p-3 font-bold text-sm outline-none bg-indigo-50/50 text-indigo-700 w-full sm:w-48 focus:border-indigo-400 cursor-pointer" onchange="this.form.submit()">
@@ -86,11 +75,6 @@
             <div class="w-full max-w-7xl mx-auto mb-6">
             {% for category, message in messages %}
               <div class="p-4 mb-3 rounded-2xl font-bold shadow-sm flex items-center gap-3 {% if category == 'error' %}bg-rose-50 text-rose-600 border border-rose-200{% else %}bg-emerald-50 text-emerald-600 border border-emerald-200{% endif %}">
-                {% if category == 'error' %}
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                {% else %}
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                {% endif %}
                 {{ message }}
               </div>
             {% endfor %}
@@ -98,12 +82,16 @@
           {% endif %}
         {% endwith %}
 
-        <div class="flex gap-2 mb-6 w-full max-w-7xl mx-auto border-b border-slate-200 pb-2">
-            <button onclick="switchTab('tab-gunluk-uretim')" id="btn-tab-gunluk-uretim" class="tab-btn bg-indigo-600 text-white shadow-md px-6 py-3 rounded-t-xl font-black text-xs uppercase tracking-widest transition flex items-center gap-2">
+        <div class="flex gap-2 mb-6 w-full max-w-7xl mx-auto border-b border-slate-200 pb-2 overflow-x-auto custom-scrollbar">
+            <button onclick="switchTab('tab-gunluk-uretim')" id="btn-tab-gunluk-uretim" class="tab-btn bg-indigo-600 text-white shadow-md px-6 py-3 rounded-t-xl font-black text-xs uppercase tracking-widest transition flex items-center gap-2 whitespace-nowrap">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                 Günlük Üretim
             </button>
-            <button onclick="switchTab('tab-recete-arsivi')" id="btn-tab-recete-arsivi" class="tab-btn bg-white text-slate-500 hover:bg-slate-50 px-6 py-3 rounded-t-xl font-black text-xs uppercase tracking-widest transition flex items-center gap-2 border border-b-0 border-slate-200">
+            <button onclick="switchTab('tab-planlama')" id="btn-tab-planlama" class="tab-btn bg-white text-slate-500 hover:bg-slate-50 px-6 py-3 rounded-t-xl font-black text-xs uppercase tracking-widest transition flex items-center gap-2 border border-b-0 border-slate-200 whitespace-nowrap">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+                📊 Porsiyon Analizi
+            </button>
+            <button onclick="switchTab('tab-recete-arsivi')" id="btn-tab-recete-arsivi" class="tab-btn bg-white text-slate-500 hover:bg-slate-50 px-6 py-3 rounded-t-xl font-black text-xs uppercase tracking-widest transition flex items-center gap-2 border border-b-0 border-slate-200 whitespace-nowrap">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
                 Reçete Arşivi
             </button>
@@ -113,7 +101,7 @@
         <div id="tab-gunluk-uretim" class="tab-content w-full">
             
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10 w-full max-w-7xl mx-auto">
-                <div class="bg-white p-6 md:p-8 rounded-[2rem] shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-200 h-full flex flex-col justify-between">
+                <div class="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 h-full flex flex-col justify-between">
                     <div>
                         <h3 class="font-black text-slate-800 mb-2 flex items-center gap-2">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-500"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
@@ -166,7 +154,6 @@
                         <svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M17 10v12H7V10l1.5-3h7.1L17 10Z"/><path d="M8.5 7v-2a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v2"/><line x1="8.5" x2="15.5" y1="7" y2="7"/></svg>
                     </div>
                     <h3 class="font-black text-sky-900 mb-1 relative z-10 text-lg flex items-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 10v12H7V10l1.5-3h7.1L17 10Z"/><path d="M8.5 7v-2a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v2"/><line x1="8.5" x2="15.5" y1="7" y2="7"/></svg>
                         Hazır İçecek Çıkışı
                     </h3>
                     <p class="text-[11px] text-sky-700 font-bold mb-5 relative z-10 uppercase tracking-widest">Mevcut Depo Stoğu: <b class="text-base ml-1 text-sky-900">{{ icecek_miktar }} Adet</b></p>
@@ -179,38 +166,58 @@
                 </div>
             </div>
 
-            <div class="bg-white rounded-[2rem] shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-200 mb-10 overflow-hidden w-full max-w-7xl mx-auto">
-                <div class="bg-slate-50 border-b border-slate-200 p-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="bg-white rounded-[2rem] shadow-sm border border-slate-200 mb-10 overflow-hidden w-full max-w-7xl mx-auto">
+                <div class="bg-slate-50 border-b border-slate-200 p-6 flex justify-between items-center">
                     <div>
                         <h3 class="text-lg font-black text-slate-800 flex items-center gap-2">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-500"><path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
                             Anlık Mutfak Deposu (Tezgah)
                         </h3>
-                        <p class="text-slate-400 font-bold text-[10px] mt-1 uppercase tracking-widest">Üretime girmemiş, rafta bekleyen malzemeler</p>
+                        <p class="text-slate-400 font-bold text-[10px] mt-1 uppercase tracking-widest">Reçeteden arta kalan fazla malzemeleri iade edin veya kazana (yemeğe) katın.</p>
                     </div>
                 </div>
                 <div class="p-6 bg-white">
                     {% if mutfak_deposu|length > 0 %}
-                    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                         {% for m in mutfak_deposu %}
-                        <div class="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex flex-col items-center justify-center text-center shadow-sm hover:border-slate-300 transition group relative">
-                            <span class="text-[11px] font-black text-slate-700 line-clamp-2 w-full mb-2 group-hover:text-indigo-600 transition" title="{{ m.malzeme_adi }}">{{ m.malzeme_adi }}</span>
-                            <span class="bg-white border border-slate-200 text-slate-800 font-black px-3 py-1.5 rounded-lg text-sm mb-3 w-full shadow-sm">
+                        <div class="bg-white border-2 border-slate-100 p-4 rounded-2xl flex flex-col items-center justify-center text-center shadow-sm hover:border-slate-300 transition">
+                            <span class="text-[11px] font-black text-slate-700 line-clamp-2 w-full mb-2" title="{{ m.malzeme_adi }}">{{ m.malzeme_adi }}</span>
+                            <span class="bg-slate-50 border border-slate-200 text-slate-800 font-black px-3 py-1.5 rounded-lg text-sm mb-3 w-full shadow-inner">
                                 {{ m.mutfak_miktar|int if m.mutfak_miktar % 1 == 0 else m.mutfak_miktar|round(2) }} <small class="text-[9px] font-bold text-slate-400">{{ m.birim }}</small>
                             </span>
                             
-                            <div class="w-full border-t border-slate-200 pt-3 mt-auto space-y-2">
-                                <form action="/uretim" method="POST" class="w-full flex items-center gap-1" onsubmit="return confirm('Bu malzemeyi Ana Depoya geri iade ediyorsunuz. Onaylıyor musunuz?');">
-                                    <input type="hidden" name="islem_tipi" value="mutfaktan_direkt_iade"><input type="hidden" name="mevcut_tarih" value="{{ secilen_tarih }}"><input type="hidden" name="mevcut_ogun" value="{{ secilen_ogun }}"><input type="hidden" name="malzeme_adi" value="{{ m.malzeme_adi }}">
-                                    <input type="number" step="0.01" min="0.01" max="{{ m.mutfak_miktar }}" name="iade_miktar" value="{{ m.mutfak_miktar|int if m.mutfak_miktar % 1 == 0 else m.mutfak_miktar|round(2) }}" required class="w-full text-center text-xs font-bold p-1.5 border border-slate-200 rounded-lg outline-none text-slate-700 bg-white focus:border-indigo-400 shadow-inner">
-                                    <button type="submit" class="bg-slate-200 hover:bg-slate-300 text-slate-700 p-2 rounded-lg font-black text-[9px] uppercase tracking-widest shadow-sm transition" title="Ana Depoya İade">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                                    </button>
+                            <div class="w-full border-t border-slate-200 pt-3 mt-auto flex flex-col gap-2">
+                                
+                                <form action="/uretim" method="POST" class="w-full flex items-center gap-1 bg-indigo-50/50 p-1.5 rounded-lg border border-indigo-100">
+                                    <input type="hidden" name="islem_tipi" value="ekstra_kullanim">
+                                    <input type="hidden" name="mevcut_tarih" value="{{ secilen_tarih }}">
+                                    <input type="hidden" name="mevcut_ogun" value="{{ secilen_ogun }}">
+                                    <input type="hidden" name="malzeme_adi" value="{{ m.malzeme_adi }}">
+                                    <input type="hidden" name="birim" value="{{ m.birim }}">
+                                    
+                                    <select name="hedef_yemek" required class="flex-1 w-full text-[9px] p-1.5 border border-white rounded font-bold outline-none bg-white text-indigo-800 cursor-pointer shadow-sm">
+                                        <option value="" disabled selected>Hangi Yemeğe?</option>
+                                        {% for u in uretimler if u.durum in ['Üretimde', 'Dağıtıldı'] %}
+                                        <option value="{{ u.yemek_adi }}">{{ u.yemek_adi }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <input type="number" step="0.01" max="{{ m.mutfak_miktar }}" name="miktar" value="{{ m.mutfak_miktar }}" required class="w-12 text-[9px] p-1.5 border border-white rounded text-center font-bold outline-none bg-white shadow-sm">
+                                    <button type="submit" class="bg-indigo-600 text-white px-2 py-1.5 rounded font-black text-[8px] uppercase tracking-widest shadow-sm hover:bg-indigo-700 transition" title="Yemeğe (Kazana) Kat">KAT</button>
                                 </form>
-                                <button type="button" onclick="openFireModal('{{ m.malzeme_adi }}', {{ m.mutfak_miktar }}, '{{ m.birim }}')" class="w-full bg-rose-50 text-rose-600 border border-rose-100 text-[10px] font-black px-2 py-2 rounded-lg uppercase tracking-widest hover:bg-rose-100 transition flex items-center justify-center gap-1.5">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
-                                    Fire Gir
-                                </button>
+
+                                <div class="flex gap-2 w-full mt-1">
+                                    <form action="/uretim" method="POST" class="w-1/2" onsubmit="return confirm('Bu malzemeyi Ana Depoya geri iade ediyorsunuz. Onaylıyor musunuz?');">
+                                        <input type="hidden" name="islem_tipi" value="mutfaktan_direkt_iade"><input type="hidden" name="mevcut_tarih" value="{{ secilen_tarih }}"><input type="hidden" name="mevcut_ogun" value="{{ secilen_ogun }}"><input type="hidden" name="malzeme_adi" value="{{ m.malzeme_adi }}">
+                                        <input type="hidden" name="iade_miktar" value="{{ m.mutfak_miktar }}">
+                                        <button type="submit" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 p-2 rounded-lg font-black text-[9px] uppercase tracking-widest shadow-sm transition border border-slate-200">
+                                            İADE ET
+                                        </button>
+                                    </form>
+                                    <button type="button" onclick="openFireModal('{{ m.malzeme_adi }}', {{ m.mutfak_miktar }}, '{{ m.birim }}')" class="w-1/2 bg-rose-50 text-rose-600 border border-rose-100 text-[9px] font-black p-2 rounded-lg uppercase tracking-widest hover:bg-rose-100 transition shadow-sm">
+                                        FİRE GİR
+                                    </button>
+                                </div>
+
                             </div>
                         </div>
                         {% endfor %}
@@ -219,7 +226,7 @@
                     <div class="text-center py-10">
                         <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-slate-300 mx-auto mb-3"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
                         <h4 class="text-slate-500 font-black uppercase tracking-widest text-[11px]">Mutfak Tezgahı Boş</h4>
-                        <p class="text-slate-400 font-medium text-xs mt-1">Şu an mutfağa çıkarılmış malzeme bulunmuyor.</p>
+                        <p class="text-slate-400 font-medium text-xs mt-1">Şu an mutfağa çıkarılmış veya artan malzeme bulunmuyor.</p>
                     </div>
                     {% endif %}
                 </div>
@@ -373,7 +380,109 @@
                     {% endif %}
                 {% endfor %}
             </div>
+        </div>
+
+        <div id="tab-planlama" class="tab-content hidden w-full max-w-7xl mx-auto space-y-6">
+            
+            <div class="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div>
+                    <h4 class="font-black text-slate-800 text-xl flex items-center gap-2">
+                        <span class="text-3xl">👥</span> Günlük Gelen (Turnike) Sayısı
+                    </h4>
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Bu sayı aşağıdaki porsiyon ve maliyet analizinde temel alınacaktır.</p>
+                </div>
+                
+                <form action="/uretim" method="POST" class="flex gap-3 items-center w-full md:w-auto">
+                    <input type="hidden" name="islem_tipi" value="gunluk_kisi_kaydet">
+                    <input type="hidden" name="mevcut_tarih" value="{{ secilen_tarih }}">
+                    <input type="hidden" name="mevcut_ogun" value="{{ secilen_ogun }}">
+                    
+                    <div class="text-center">
+                        <label class="text-[9px] font-black text-indigo-500 uppercase block mb-1">Öğrenci</label>
+                        <input type="number" name="ogrenci_sayisi" value="{{ istatistik.ogrenci_sayisi if istatistik else 0 }}" class="w-full sm:w-20 p-2.5 border-2 border-slate-100 rounded-xl text-center font-black outline-none focus:border-indigo-400 transition bg-slate-50">
+                    </div>
+                    <div class="text-center">
+                        <label class="text-[9px] font-black text-indigo-500 uppercase block mb-1">Personel</label>
+                        <input type="number" name="personel_sayisi" value="{{ istatistik.personel_sayisi if istatistik else 0 }}" class="w-full sm:w-20 p-2.5 border-2 border-slate-100 rounded-xl text-center font-black outline-none focus:border-indigo-400 transition bg-slate-50">
+                    </div>
+                    <div class="text-center bg-slate-50 p-2.5 rounded-xl border border-slate-100 ml-2 hidden sm:block">
+                        <label class="text-[9px] font-black text-slate-400 uppercase block mb-1">Toplam</label>
+                        <span class="font-black text-slate-800 text-lg">{{ toplam_gelen }}</span>
+                    </div>
+                    <button type="submit" class="bg-indigo-600 text-white font-black px-6 py-3.5 rounded-xl text-[10px] uppercase tracking-widest hover:bg-indigo-700 shadow-sm transition ml-2 self-end sm:self-auto h-[46px]" onclick="setTimeout(()=>localStorage.setItem('satisSekme', 'tab-planlama'),10)">Güncelle</button>
+                </form>
             </div>
+
+            <div class="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
+                <div class="p-6 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                    <h4 class="font-black text-slate-800 text-base uppercase tracking-widest flex items-center gap-2">
+                        <span class="text-2xl">⚖️</span> Kırmızı Et & Ana Malzeme Porsiyon Varyansı
+                    </h4>
+                    <span class="bg-white border border-slate-200 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-slate-500 shadow-sm">
+                        Kayıtlı Turnike: <b class="text-indigo-600 text-sm ml-1">{{ toplam_gelen }}</b>
+                    </span>
+                </div>
+                <div class="overflow-x-auto custom-scrollbar">
+                    <table class="w-full text-left whitespace-nowrap text-sm">
+                        <thead class="bg-white text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                            <tr>
+                                <th class="p-5 pl-6">Yemek & Malzeme</th>
+                                <th class="p-5 text-center">Reçete <br><span class="text-[8px]">(Kişi Başı)</span></th>
+                                <th class="p-5 text-center bg-slate-50/50">Net Pişen <br><span class="text-[8px]">(Kazan)</span></th>
+                                <th class="p-5 text-center bg-indigo-50/30">Teorik <br><span class="text-[8px]">Porsiyon</span></th>
+                                <th class="p-5 text-center pr-6">Fark <br><span class="text-[8px]">(Varyans)</span></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-50">
+                            {% for p in porsiyon_analizleri %}
+                            <tr class="hover:bg-slate-50/50 transition">
+                                <td class="p-5 pl-6">
+                                    <span class="font-black text-slate-800 block text-base">{{ p.yemek_adi }}</span>
+                                    <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Malzeme: <b class="text-indigo-600">{{ p.malzeme }}</b></span>
+                                </td>
+                                <td class="p-5 text-center">
+                                    <span class="font-black text-slate-600 bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-lg">{{ p.recete_gr }} <small class="text-[9px]">GR</small></span>
+                                </td>
+                                <td class="p-5 text-center bg-slate-50/50">
+                                    <span class="bg-white border border-slate-200 px-4 py-2 rounded-xl font-black text-slate-800 shadow-sm">{{ "%.2f"|format(p.net) }} <small class="text-[9px]">{{ p.birim }}</small></span>
+                                    {% if p.ekstra > 0 %}
+                                    <span class="block text-[8px] font-black text-orange-500 uppercase mt-2">(+{{ "%.2f"|format(p.ekstra) }} {{ p.birim }} Ekstra Katıldı)</span>
+                                    {% endif %}
+                                </td>
+                                <td class="p-5 text-center bg-indigo-50/30">
+                                    <span class="font-black text-indigo-700 text-xl">{{ p.porsiyon }}</span>
+                                    <span class="block text-[9px] font-bold text-indigo-400 uppercase tracking-widest mt-0.5">Kişilik</span>
+                                </td>
+                                <td class="p-5 text-center pr-6">
+                                    {% if p.fark > 0 %}
+                                        <div class="bg-rose-50 text-rose-600 border border-rose-200 px-4 py-2 rounded-xl shadow-sm inline-flex flex-col items-center">
+                                            <span class="font-black text-lg">+{{ p.fark }}</span>
+                                            <span class="text-[8px] uppercase tracking-widest font-black">Fazla / Kayıp</span>
+                                        </div>
+                                    {% elif p.fark < 0 %}
+                                        <div class="bg-orange-50 text-orange-600 border border-orange-200 px-4 py-2 rounded-xl shadow-sm inline-flex flex-col items-center">
+                                            <span class="font-black text-lg">{{ p.fark }}</span>
+                                            <span class="text-[8px] uppercase tracking-widest font-black">Pors. Küçüldü</span>
+                                        </div>
+                                    {% else %}
+                                        <div class="bg-emerald-50 text-emerald-600 border border-emerald-200 px-4 py-2 rounded-xl shadow-sm inline-flex flex-col items-center">
+                                            <span class="font-black text-lg">0</span>
+                                            <span class="text-[8px] uppercase tracking-widest font-black">Sıfır Hata</span>
+                                        </div>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="5" class="p-16 text-center text-slate-400 font-bold uppercase tracking-widest text-xs border border-dashed border-slate-200 bg-slate-50 m-6 rounded-2xl">
+                                <span class="text-4xl opacity-50 block mb-3">⚖️</span>
+                                Analiz edilebilecek ana malzeme (kırmızı et vb.) bulunamadı. Lütfen üretime malzeme ekleyin.
+                            </td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
 
         <div id="tab-recete-arsivi" class="tab-content hidden w-full">
             <div class="bg-white p-8 rounded-[2rem] shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-200 w-full max-w-7xl mx-auto">

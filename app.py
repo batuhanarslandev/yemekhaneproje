@@ -718,6 +718,14 @@ def depo():
 def uretim():
     conn = get_db_connection()
     bugun = date.today().strftime('%Y-%m-%d')
+    
+    # --- VERİTABANI GÜNCELLEMESİ (Ekstra Kullanım Tablosu) ---
+    conn.execute('''CREATE TABLE IF NOT EXISTS mutfak_ekstra_kullanim (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tarih TEXT, ogun TEXT, yemek_adi TEXT, malzeme_adi TEXT, miktar REAL, birim TEXT
+    )''')
+    conn.commit()
+
     if request.method == 'POST':
         islem = request.form.get('islem_tipi')
         m_tarih = request.form.get('mevcut_tarih', bugun)
@@ -729,18 +737,11 @@ def uretim():
         elif islem == 'hizli_icecek_dus':
             icecek_adi = "Ayran / Meyve Suyu"; miktar = float(request.form.get('icecek_miktar', 0))
             mevcut = conn.execute("SELECT id, miktar FROM depo WHERE urun_adi=?", (icecek_adi,)).fetchone()
-            if mevcut and mevcut['miktar'] >= miktar:
+            if mevcut and mevcut['miktar'] and float(mevcut['miktar']) >= miktar:
                 conn.execute("UPDATE depo SET miktar = miktar - ? WHERE id=?", (miktar, mevcut['id']))
                 conn.execute("INSERT INTO depo_cikis (tarih, ogun, yemek_adi, malzeme_adi, miktar, birim, onay_durumu, aciklama) VALUES (?,?,?,?,?,'ADET','Onaylandı','Otomatik İçecek')", (m_tarih, m_ogun, "İçecek Dağıtımı", icecek_adi, miktar))
-                conn.commit(); flash(f"✅ {int(miktar) if miktar.is_integer() else miktar} Adet İçecek düşüldü.", "success")
+                conn.commit(); flash(f"✅ İçecek başarıyla düşüldü.", "success")
             else: flash("Depoda yeterli İçecek yok!", "error")
-
-        elif islem == 'kriz_bildir':
-            mevcut = conn.execute('SELECT id FROM gunluk_istatistik WHERE tarih=? AND ogun=?', (m_tarih, m_ogun)).fetchone()
-            yetmedi = int(request.form.get('kisi_ac_kaldi', 0)); detay = request.form.get('alternatif_detay', '')
-            if mevcut: conn.execute('UPDATE gunluk_istatistik SET yemek_yetmedi=?, alternatif_detay=? WHERE id=?', (yetmedi, detay, mevcut['id']))
-            else: conn.execute('INSERT INTO gunluk_istatistik (tarih, ogun, yemek_yetmedi, alternatif_detay) VALUES (?,?,?,?)', (m_tarih, m_ogun, yetmedi, detay))
-            conn.commit(); flash("Kriz raporlara işlendi.", "success")
 
         elif islem == 'manuel_yemek_ekle':
             y_adi = request.form['yemek_adi'].strip().title()
@@ -753,7 +754,10 @@ def uretim():
         elif islem == 'uretime_gonder':
             uretim_id = request.form['uretim_id']; planlanan = int(request.form['planlanan_kisi']); yemek_adi = request.form['yemek_adi']
             u = conn.execute("SELECT * FROM uretim WHERE id=?", (uretim_id,)).fetchone()
-            sifirdan_kisi = max(0, planlanan - u['dondurucudan_alinan'])
+            
+            # GÜVENLİK: dondurucudan_alinan NULL ise 0 say
+            d_alinan = u['dondurucudan_alinan'] if u['dondurucudan_alinan'] else 0
+            sifirdan_kisi = max(0, planlanan - d_alinan)
             receteler = conn.execute("SELECT * FROM receteler WHERE yemek_adi=?", (yemek_adi,)).fetchall()
 
             if not receteler:
@@ -771,53 +775,19 @@ def uretim():
                         if mutfak_miktar < gereken - 0.05:
                             yeterli = False
                             eksik = round(gereken - mutfak_miktar, 2)
-                            eksik_str = int(eksik) if eksik.is_integer() else eksik
-                            hata_mesaji.append(f"{r['malzeme_adi']} ({eksik_str} {d_m['birim'] if d_m else 'KG'} eksik)")
+                            hata_mesaji.append(f"{r['malzeme_adi']} ({eksik} eksik)")
 
                 if not yeterli: flash(f"MUTFAK STOĞU YETERSİZ! Depodan eksik mal çıkılmış: {', '.join(hata_mesaji)}", "error")
                 else:
                     conn.execute("UPDATE uretim SET planlanan_kisi=?, durum='Üretimde' WHERE id=?", (planlanan, uretim_id))
                     conn.commit(); flash(f"✅ '{yemek_adi}' üretime alındı. Mutfaktaki malzemeler kullanılıyor.", "success")
 
-        elif islem == 'fazlayi_iade_et':
-            u_id = request.form['uretim_id']
-            u = conn.execute("SELECT * FROM uretim WHERE id=?", (u_id,)).fetchone()
-            sifirdan_kisi = max(0, u['planlanan_kisi'] - u['dondurucudan_alinan'])
-            receteler = conn.execute("SELECT * FROM receteler WHERE yemek_adi=?", (u['yemek_adi'],)).fetchall()
-
-            iade_edilenler = []
-            for r in receteler:
-                d_m = conn.execute('SELECT id, birim FROM depo WHERE urun_adi COLLATE NOCASE = ?', (r['malzeme_adi'],)).fetchone()
-                if not d_m: continue
-                oran = 1000 if d_m['birim'].upper() in ['KG','LT'] else 1
-                gereken = (r['miktar'] * sifirdan_kisi) / oran if u['durum'] != 'Planlandı' else 0
-                mutfak_stok = conn.execute("SELECT SUM(miktar) as c FROM depo_cikis WHERE tarih=? AND ogun=? AND yemek_adi=? AND malzeme_adi=? AND onay_durumu='Onaylandı'", (u['tarih'], u['ogun'], u['yemek_adi'], r['malzeme_adi'])).fetchone()
-                mutfak_miktar = mutfak_stok['c'] if mutfak_stok and mutfak_stok['c'] else 0
-
-                fazla = round(mutfak_miktar - gereken, 2)
-                if fazla > 0.05:
-                    conn.execute('UPDATE depo SET miktar = miktar + ? WHERE id=?', (fazla, d_m['id']))
-
-                    # YENİ EKLENEN: Geri dönen ürünü sistemde parçalamadan eski listeyle birleştir
-                    mevcut_lot = conn.execute("SELECT id FROM stok_lotlari WHERE urun_adi COLLATE NOCASE=? ORDER BY id DESC LIMIT 1", (r['malzeme_adi'],)).fetchone()
-                    if mevcut_lot:
-                        conn.execute("UPDATE stok_lotlari SET kalan_miktar = kalan_miktar + ? WHERE id=?", (fazla, mevcut_lot['id']))
-                    else:
-                        conn.execute("INSERT INTO stok_lotlari (urun_adi, marka, baslangic_miktar, kalan_miktar, birim) VALUES (?, 'İade', ?, ?, ?)", (r['malzeme_adi'], fazla, fazla, d_m['birim']))
-
-                    conn.execute("INSERT INTO depo_cikis (tarih, ogun, yemek_adi, malzeme_adi, miktar, birim, onay_durumu, aciklama) VALUES (?,?,?,?,?,?,'Onaylandı','Fazla Malzeme Depoya İade')", (u['tarih'], u['ogun'], u['yemek_adi'], r['malzeme_adi'], -fazla, d_m['birim']))
-                    fazla_str = int(fazla) if fazla.is_integer() else fazla
-                    iade_edilenler.append(f"{fazla_str} {d_m['birim']} {r['malzeme_adi']}")
-
+        # --- YENİ: MUTFAK TEZGAHINDAKİ FAZLA ETİ YEMEĞE (KAZANA) KATMA İŞLEMİ ---
+        elif islem == 'ekstra_kullanim':
+            conn.execute("INSERT INTO mutfak_ekstra_kullanim (tarih, ogun, yemek_adi, malzeme_adi, miktar, birim) VALUES (?,?,?,?,?,?)", 
+                         (m_tarih, m_ogun, request.form['hedef_yemek'], request.form['malzeme_adi'], float(request.form['miktar']), request.form['birim']))
             conn.commit()
-            if iade_edilenler: flash(f"Fazla malzemeler depoya iade edildi: {', '.join(iade_edilenler)}", "success")
-            else: flash("İade edilecek fazla malzeme bulunamadı.", "info")
-
-        elif islem == 'uretim_iptal':
-            conn.execute("UPDATE uretim SET durum='Planlandı', planlanan_kisi=0 WHERE id=?", (request.form['uretim_id'],))
-            conn.commit(); flash("Üretim iptal edildi. Malzemeler mutfakta duruyor, isterseniz 'İade Et' butonuyla depoya yollayabilirsiniz.", "success")
-
-        elif islem == 'uretim_sil': conn.execute('DELETE FROM uretim WHERE id=?', (request.form['uretim_id'],)); conn.commit()
+            flash(f"✅ Fazla kalan {request.form['miktar']} {request.form['birim']} {request.form['malzeme_adi']}, '{request.form['hedef_yemek']}' kazanına eklendi.", "success")
 
         elif islem == 'mutfaktan_direkt_iade':
             malzeme_adi = request.form['malzeme_adi']
@@ -825,56 +795,54 @@ def uretim():
             d_m = conn.execute('SELECT id, birim FROM depo WHERE urun_adi COLLATE NOCASE = ?', (malzeme_adi,)).fetchone()
             if d_m:
                 conn.execute('UPDATE depo SET miktar = miktar + ? WHERE id=?', (iade_miktar, d_m['id']))
-
-                # YENİ EKLENEN: Geri dönen ürünü sistemde parçalamadan eski listeyle birleştir
                 mevcut_lot = conn.execute("SELECT id FROM stok_lotlari WHERE urun_adi COLLATE NOCASE=? ORDER BY id DESC LIMIT 1", (malzeme_adi,)).fetchone()
-                if mevcut_lot:
-                    conn.execute("UPDATE stok_lotlari SET kalan_miktar = kalan_miktar + ? WHERE id=?", (iade_miktar, mevcut_lot['id']))
-                else:
-                    conn.execute("INSERT INTO stok_lotlari (urun_adi, marka, baslangic_miktar, kalan_miktar, birim) VALUES (?, 'İade', ?, ?, ?)", (malzeme_adi, iade_miktar, iade_miktar, d_m['birim']))
+                if mevcut_lot: conn.execute("UPDATE stok_lotlari SET kalan_miktar = kalan_miktar + ? WHERE id=?", (iade_miktar, mevcut_lot['id']))
+                else: conn.execute("INSERT INTO stok_lotlari (urun_adi, marka, baslangic_miktar, kalan_miktar, birim) VALUES (?, 'İade', ?, ?, ?)", (malzeme_adi, iade_miktar, iade_miktar, d_m['birim']))
 
                 conn.execute("INSERT INTO depo_cikis (tarih, ogun, yemek_adi, malzeme_adi, miktar, birim, onay_durumu, aciklama) VALUES (?,?,?,?,?,?,'Onaylandı','Mutfaktan Depoya İade')", (m_tarih, m_ogun, 'Mutfak İadesi', malzeme_adi, -iade_miktar, d_m['birim']))
-                conn.commit()
-                flash(f"✅ {iade_miktar} {d_m['birim']} '{malzeme_adi}' başarıyla ana depoya geri alındı.", "success")
+                conn.commit(); flash(f"✅ {iade_miktar} {d_m['birim']} '{malzeme_adi}' başarıyla ana depoya geri alındı.", "success")
 
+        elif islem == 'uretim_iptal':
+            conn.execute("UPDATE uretim SET durum='Planlandı', planlanan_kisi=0 WHERE id=?", (request.form['uretim_id'],)); conn.commit(); flash("Üretim iptal edildi.", "success")
+        elif islem == 'uretim_sil': conn.execute('DELETE FROM uretim WHERE id=?', (request.form['uretim_id'],)); conn.commit()
+        
         elif islem == 'gunluk_kisi_kaydet':
             mevcut = conn.execute('SELECT id FROM gunluk_istatistik WHERE tarih=? AND ogun=?', (m_tarih, m_ogun)).fetchone()
             if mevcut: conn.execute('UPDATE gunluk_istatistik SET personel_sayisi=?, ogrenci_sayisi=? WHERE id=?', (int(request.form.get('personel_sayisi', 0)), int(request.form.get('ogrenci_sayisi', 0)), mevcut['id']))
             else: conn.execute('INSERT INTO gunluk_istatistik (tarih, ogun, personel_sayisi, ogrenci_sayisi) VALUES (?,?,?,?)', (m_tarih, m_ogun, int(request.form.get('personel_sayisi', 0)), int(request.form.get('ogrenci_sayisi', 0))))
-            conn.commit()
-        elif islem == 'gun_sonu': conn.execute("UPDATE uretim SET gerceklesen_kisi=?, durum='Dağıtıldı' WHERE id=?", (request.form['gerceklesen'], request.form['uretim_id'])); conn.commit(); flash("Yemek dağıtıldı olarak işaretlendi.", "success")
+            conn.commit(); flash("✅ Turnike verisi güncellendi, porsiyon analizi yenilendi.", "success")
+
+        elif islem == 'gun_sonu': conn.execute("UPDATE uretim SET gerceklesen_kisi=?, durum='Dağıtıldı' WHERE id=?", (request.form['gerceklesen'], request.form['uretim_id'])); conn.commit()
         elif islem == 'gun_sonu_iptal': conn.execute("UPDATE uretim SET gerceklesen_kisi=0, durum='Üretimde' WHERE id=?", (request.form['uretim_id'],)); conn.commit()
-        elif islem == 'recete_ekle':
-            conn.execute('INSERT INTO receteler (yemek_adi, malzeme_adi, miktar, birim) VALUES (?,?,?,?)', (request.form['yemek_adi'], request.form['malzeme_adi'], float(request.form['miktar_gram']), request.form.get('birim', 'Gr')))
-            conn.commit()
-        elif islem == 'recete_sil':
-            conn.execute('DELETE FROM receteler WHERE id=?', (request.form['recete_id'],))
-            conn.commit()
-
-        elif islem == 'recete_arsiv_ekle':
-            conn.execute('INSERT INTO receteler (yemek_adi, malzeme_adi, miktar, birim) VALUES (?,?,?,?)', (request.form['yemek_adi'].title(), request.form['malzeme_adi'], float(request.form['miktar_gram']), request.form.get('birim', 'Gr')))
-            conn.commit()
-            flash(f"Reçete arşivi güncellendi.", "success")
-
-        elif islem == 'recete_arsiv_sil':
-            conn.execute('DELETE FROM receteler WHERE id=?', (request.form['recete_id'],))
-            conn.commit()
-            flash("Malzeme reçeteden çıkarıldı.", "success")
+        elif islem == 'recete_ekle': conn.execute('INSERT INTO receteler (yemek_adi, malzeme_adi, miktar, birim) VALUES (?,?,?,?)', (request.form['yemek_adi'], request.form['malzeme_adi'], float(request.form['miktar_gram']), request.form.get('birim', 'Gr'))); conn.commit()
+        elif islem == 'recete_sil': conn.execute('DELETE FROM receteler WHERE id=?', (request.form['recete_id'],)); conn.commit()
+        elif islem == 'recete_arsiv_ekle': conn.execute('INSERT INTO receteler (yemek_adi, malzeme_adi, miktar, birim) VALUES (?,?,?,?)', (request.form['yemek_adi'].title(), request.form['malzeme_adi'], float(request.form['miktar_gram']), request.form.get('birim', 'Gr'))); conn.commit(); flash("Reçete arşivi güncellendi.", "success")
+        elif islem == 'recete_arsiv_sil': conn.execute('DELETE FROM receteler WHERE id=?', (request.form['recete_id'],)); conn.commit(); flash("Malzeme reçeteden çıkarıldı.", "success")
 
         return redirect(url_for('uretim', tarih=m_tarih, ogun=m_ogun))
 
     tarih = request.args.get('tarih', bugun)
     ogun = request.args.get('ogun', 'Öğle Yemeği')
 
+    # GÜVENLİK: İstatistik sayımlarını Null-Check ile yap
     istatistik = conn.execute('SELECT * FROM gunluk_istatistik WHERE tarih=? AND ogun=?', (tarih, ogun)).fetchone()
-    toplam_gelen = (istatistik['personel_sayisi'] + istatistik['ogrenci_sayisi']) if istatistik else 0
+    toplam_gelen = 0
+    if istatistik:
+        p_sayisi = istatistik['personel_sayisi'] if istatistik['personel_sayisi'] else 0
+        o_sayisi = istatistik['ogrenci_sayisi'] if istatistik['ogrenci_sayisi'] else 0
+        toplam_gelen = p_sayisi + o_sayisi
 
     query = 'SELECT * FROM uretim WHERE tarih = ?'; params = [tarih]
     if ogun and ogun != 'Tümü': query += ' AND ogun = ?'; params.append(ogun)
     uretimler = []
     for u in conn.execute(query, params).fetchall():
         u_dict = dict(u); m_list = []
-        sifirdan_kisi = max(0, u['planlanan_kisi'] - u['dondurucudan_alinan'])
+        
+        # GÜVENLİK: Null-Check
+        p_kisi = u['planlanan_kisi'] if u['planlanan_kisi'] else 0
+        d_alinan = u['dondurucudan_alinan'] if u['dondurucudan_alinan'] else 0
+        sifirdan_kisi = max(0, p_kisi - d_alinan)
+        
         for r in conn.execute('SELECT * FROM receteler WHERE yemek_adi=?', (u['yemek_adi'],)).fetchall():
             d_m = conn.execute('SELECT birim FROM depo WHERE urun_adi COLLATE NOCASE = ?', (r['malzeme_adi'],)).fetchone()
             oran = 1000 if d_m and d_m['birim'].upper() in ['KG','LT'] else 1
@@ -894,24 +862,39 @@ def uretim():
     yedek_stok_db = conn.execute('SELECT * FROM yedek_stok WHERE porsiyon > 0').fetchall()
     yedek_dict = {y['yemek_adi']: y['porsiyon'] for y in yedek_stok_db}
     depo_malz = conn.execute('SELECT urun_adi FROM depo ORDER BY urun_adi').fetchall()
+    
+    # GÜVENLİK: Null-Check
     icecek_stok = conn.execute("SELECT miktar FROM depo WHERE urun_adi='Ayran / Meyve Suyu'").fetchone()
-    icecek_miktar = int(icecek_stok['miktar']) if icecek_stok and float(icecek_stok['miktar']).is_integer() else (icecek_stok['miktar'] if icecek_stok else 0)
+    icecek_miktar = 0
+    if icecek_stok and icecek_stok['miktar'] is not None:
+        try:
+            m_val = float(icecek_stok['miktar'])
+            icecek_miktar = int(m_val) if m_val.is_integer() else m_val
+        except: pass
+        
     mevcut_yemekler = conn.execute('SELECT DISTINCT yemek_adi FROM receteler ORDER BY yemek_adi').fetchall()
 
     # --- ANLIK MUTFAK DEPOSU HESAPLAMA MOTORU ---
-    # Mutfak tezgahında görünmemesi gereken doğrudan tüketim/çıkış türleri
     istisnalar = ('Zayi/Fire', 'Personel İkram', 'Genel Tüketim', 'Kumanya')
 
     if ogun and ogun != 'Tümü':
         mutfak_stok_raw = conn.execute("SELECT malzeme_adi, birim, SUM(miktar) as toplam_cikan FROM depo_cikis WHERE tarih=? AND ogun=? AND onay_durumu='Onaylandı' GROUP BY malzeme_adi", (tarih, ogun)).fetchall()
         aktif_uretimler = conn.execute("SELECT yemek_adi, planlanan_kisi, dondurucudan_alinan FROM uretim WHERE tarih=? AND ogun=? AND durum IN ('Üretimde', 'Dağıtıldı')", (tarih, ogun)).fetchall()
+        ekstralar_raw = conn.execute("SELECT malzeme_adi, SUM(miktar) as c FROM mutfak_ekstra_kullanim WHERE tarih=? AND ogun=? GROUP BY malzeme_adi", (tarih, ogun)).fetchall()
     else:
         mutfak_stok_raw = conn.execute("SELECT malzeme_adi, birim, SUM(miktar) as toplam_cikan FROM depo_cikis WHERE tarih=? AND onay_durumu='Onaylandı' AND ogun NOT IN (?, ?, ?, ?) GROUP BY malzeme_adi", (tarih, *istisnalar)).fetchall()
         aktif_uretimler = conn.execute("SELECT yemek_adi, planlanan_kisi, dondurucudan_alinan FROM uretim WHERE tarih=? AND durum IN ('Üretimde', 'Dağıtıldı')", (tarih,)).fetchall()
+        ekstralar_raw = conn.execute("SELECT malzeme_adi, SUM(miktar) as c FROM mutfak_ekstra_kullanim WHERE tarih=? GROUP BY malzeme_adi", (tarih,)).fetchall()
+
+    ekstra_dict = {e['malzeme_adi']: (e['c'] if e['c'] else 0) for e in ekstralar_raw}
 
     tuketim = {}
     for u in aktif_uretimler:
-        kisi = max(0, u['planlanan_kisi'] - u['dondurucudan_alinan'])
+        # GÜVENLİK: Null-Check
+        p_kisi = u['planlanan_kisi'] if u['planlanan_kisi'] else 0
+        d_alinan = u['dondurucudan_alinan'] if u['dondurucudan_alinan'] else 0
+        kisi = max(0, p_kisi - d_alinan)
+        
         r_list = conn.execute("SELECT malzeme_adi, miktar FROM receteler WHERE yemek_adi=?", (u['yemek_adi'],)).fetchall()
         for r in r_list:
             malz = r['malzeme_adi']
@@ -921,23 +904,48 @@ def uretim():
 
     mutfak_deposu = []
     for m in mutfak_stok_raw:
+        if not m['toplam_cikan']: continue
         malz = m['malzeme_adi']
-        kalan = m['toplam_cikan'] - tuketim.get(malz, 0)
-        if kalan > 0.05:
-            mutfak_deposu.append({'malzeme_adi': malz, 'mutfak_miktar': kalan, 'birim': m['birim']})
-    # --------------------------------------------
+        kalan = m['toplam_cikan'] - tuketim.get(malz, 0) - ekstra_dict.get(malz, 0)
+        if kalan > 0.05: mutfak_deposu.append({'malzeme_adi': malz, 'mutfak_miktar': kalan, 'birim': m['birim']})
+            
+    # --- PORSİYON VE VARYANS ANALİZİ MOTORU ---
+    porsiyon_analizleri = []
+    for u in aktif_uretimler:
+        receteler = conn.execute("SELECT malzeme_adi, miktar FROM receteler WHERE yemek_adi=?", (u['yemek_adi'],)).fetchall()
+        for r in receteler:
+            malz = r['malzeme_adi']
+            d_m = conn.execute('SELECT birim FROM depo WHERE urun_adi COLLATE NOCASE = ?', (malz,)).fetchone()
+            birim = d_m['birim'] if d_m else 'KG'
+            
+            c_db = conn.execute("SELECT SUM(miktar) as c FROM depo_cikis WHERE tarih=? AND ogun=? AND yemek_adi=? AND malzeme_adi=? AND onay_durumu='Onaylandı' AND aciklama NOT LIKE '%İade%'", (tarih, ogun, u['yemek_adi'], malz)).fetchone()
+            cikan = c_db['c'] if c_db and c_db['c'] else 0
+            
+            i_db = conn.execute("SELECT SUM(miktar) as c FROM depo_cikis WHERE tarih=? AND ogun=? AND yemek_adi=? AND malzeme_adi=? AND onay_durumu='Onaylandı' AND aciklama LIKE '%İade%'", (tarih, ogun, u['yemek_adi'], malz)).fetchone()
+            iade = abs(i_db['c']) if i_db and i_db['c'] else 0
+            
+            e_db = conn.execute("SELECT SUM(miktar) as c FROM mutfak_ekstra_kullanim WHERE tarih=? AND ogun=? AND yemek_adi=? AND malzeme_adi=?", (tarih, ogun, u['yemek_adi'], malz)).fetchone()
+            ekstra = e_db['c'] if e_db and e_db['c'] else 0
+            
+            net_pisen = cikan - iade
+            oran = 1000 if birim.upper() in ['KG','LT'] else 1
+            porsiyon_gr = r['miktar'] / oran
+            
+            teorik_porsiyon = int(net_pisen / porsiyon_gr) if porsiyon_gr > 0 else 0
+            fark = teorik_porsiyon - toplam_gelen
+            
+            if net_pisen > 0 and birim.upper() in ['KG', 'LT']:
+                porsiyon_analizleri.append({'yemek_adi': u['yemek_adi'], 'malzeme': malz, 'recete_gr': r['miktar'], 'cikan': cikan, 'iade': iade, 'ekstra': ekstra, 'net': net_pisen, 'porsiyon': teorik_porsiyon, 'turnike': toplam_gelen, 'fark': fark, 'birim': birim})
 
-    # REÇETE ARŞİVİNİ ÇEK VE GRUPLA
+    # ARŞİV
     receteler_ham = conn.execute("SELECT id, yemek_adi, malzeme_adi, miktar, birim FROM receteler ORDER BY yemek_adi ASC").fetchall()
     recete_arsivi = {}
     for r in receteler_ham:
-        y_adi = r['yemek_adi']
-        if y_adi not in recete_arsivi:
-            recete_arsivi[y_adi] = []
-        recete_arsivi[y_adi].append({'id': r['id'], 'malzeme': r['malzeme_adi'], 'miktar': r['miktar'], 'birim': r['birim']})
+        if r['yemek_adi'] not in recete_arsivi: recete_arsivi[r['yemek_adi']] = []
+        recete_arsivi[r['yemek_adi']].append({'id': r['id'], 'malzeme': r['malzeme_adi'], 'miktar': r['miktar'], 'birim': r['birim']})
 
     conn.close()
-    return render_template('uretim.html', uretimler=uretimler, secilen_tarih=tarih, secilen_ogun=ogun, istatistik=istatistik, depo_malzemeler=depo_malz, yedek_dict=yedek_dict, toplam_gelen=toplam_gelen, icecek_miktar=icecek_miktar, mevcut_yemekler=mevcut_yemekler, mutfak_deposu=mutfak_deposu, recete_arsivi=recete_arsivi)
+    return render_template('uretim.html', uretimler=uretimler, secilen_tarih=tarih, secilen_ogun=ogun, istatistik=istatistik, depo_malzemeler=depo_malz, icecek_miktar=icecek_miktar, mevcut_yemekler=mevcut_yemekler, mutfak_deposu=mutfak_deposu, recete_arsivi=recete_arsivi, toplam_gelen=toplam_gelen, porsiyon_analizleri=porsiyon_analizleri)
 
 @app.route('/denetim', methods=['GET', 'POST'])
 @login_required
