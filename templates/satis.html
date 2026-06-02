@@ -235,15 +235,15 @@
                                     <td class="p-5 text-center">
                                         {% set is_vakif = '🏛️' in d.tahsilat_durumu %}
                                         <button type="button" onclick="openStatusModal('{{ d.id }}', '{{ d.tahsilat_durumu }}', '{{ d.firma_odeme_durumu }}')" 
-                                            class="flex flex-col gap-1.5 w-52 mx-auto p-3 rounded-xl border border-b-4 transition text-left group shadow-sm
-                                            {% if is_vakif %} bg-blue-500 border-blue-700 hover:bg-blue-600 text-white
-                                            {% elif is_t_ok and is_f_ok %} bg-emerald-500 border-emerald-700 hover:bg-emerald-600 text-white
-                                            {% elif is_t_ok %} bg-amber-400 border-amber-500 hover:bg-amber-500 text-amber-900
-                                            {% else %} bg-rose-500 border-rose-700 hover:bg-rose-600 text-white {% endif %}">
+                                            class="flex flex-col gap-1.5 w-52 mx-auto p-3 rounded-xl border-2 transition text-left group shadow-sm backdrop-blur-sm
+                                            {% if is_vakif %} bg-blue-100/60 border-blue-200 hover:bg-blue-200/80 text-blue-800
+                                            {% elif is_t_ok and is_f_ok %} bg-emerald-100/60 border-emerald-200 hover:bg-emerald-200/80 text-emerald-800
+                                            {% elif is_t_ok %} bg-orange-100/60 border-orange-200 hover:bg-orange-200/80 text-orange-800
+                                            {% else %} bg-rose-100/60 border-rose-200 hover:bg-rose-200/80 text-rose-800 {% endif %}">
                                             
-                                            <div class="text-[9px] font-black uppercase tracking-widest mb-1 flex justify-between items-center opacity-90">
+                                            <div class="text-[9px] font-black uppercase tracking-widest mb-1 flex justify-between items-center opacity-70">
                                                 <span>Finans Durumu</span>
-                                                <span class="p-1 rounded bg-white/20 group-hover:bg-white/40 transition">⚙️</span>
+                                                <span class="p-1 rounded bg-white/60 group-hover:bg-white transition shadow-sm">⚙️</span>
                                             </div>
                                             <div class="text-[10px] font-bold truncate" title="{{ d.tahsilat_durumu }}">
                                                 💰 {{ d.tahsilat_durumu }}
