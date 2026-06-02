@@ -407,6 +407,13 @@
                                 </td>
                                 <td class="p-5 text-right pr-6 flex justify-end gap-2">
                                     <button onclick="openPersonelModal('{{ {'ad': p.ad_soyad, 'gorev': p.gorev, 'kalan': p.kalan_izin, 'son_bas': p.son_izin_bas, 'son_bit': p.son_izin_bit, 'gecmis': p.son_yoklamalar}|tojson|forceescape }}')" class="bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 text-slate-500 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition shadow-sm">Karnesi</button>
+                                    
+                                    <!-- YENİ: İŞTEN ÇIKIŞ (PASİFE ALMA) BUTONU -->
+                                    <form action="/personel" method="POST" class="m-0" onsubmit="return confirm('{{ p.ad_soyad }} isimli personelin işten çıkışını vermek istediğinize emin misiniz? Tüm geçmiş verileri korunacak ancak aktif listelerden düşecektir.');">
+                                        <input type="hidden" name="islem_tipi" value="personel_sil">
+                                        <input type="hidden" name="personel_id" value="{{ p.id }}">
+                                        <button type="submit" class="bg-white border border-slate-200 hover:border-rose-300 hover:text-rose-600 hover:bg-rose-50 text-slate-400 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition shadow-sm" title="İşten Çıkışını Ver (Arşivle)">Çıkış Ver</button>
+                                    </form>
                                 </td>
                             </tr>
                             {% endfor %}
