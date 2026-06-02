@@ -9,25 +9,29 @@
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f9fafb; border-radius: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+        .custom-scrollbar:hover::-webkit-scrollbar-thumb { background: #9ca3af; }
     </style>
 </head>
 <body class="bg-gray-50 flex min-h-screen font-sans">
 
     {% include 'sidebar.html' %}
 
-    <div class="ml-64 flex-1 p-10 min-w-0">
+    <div class="ml-64 flex-1 p-10 min-w-0 transition-all duration-300">
         {% include 'topbar.html' %}
         
         <div class="mb-10 border-b border-gray-200 pb-6">
             <h1 class="text-3xl font-black text-gray-800 flex items-center gap-3"><span>📈</span> Raporlar & Analizler</h1>
-            <p class="text-gray-500 font-bold mt-2">Gün sonu kriz tutanakları ve üretim fire analizlerini buradan takip edebilirsiniz.</p>
+            <p class="text-gray-500 font-bold mt-2">Kriz tutanakları, üretim fireleri ve personel İK (devamsızlık) geçmişini buradan takip edebilirsiniz.</p>
             
-            <div class="flex gap-4 mt-8">
-                <button onclick="switchTab('krizTab')" id="btn-krizTab" class="py-2.5 px-6 rounded-xl font-black text-sm transition-all duration-300 bg-indigo-600 text-white shadow-md border border-indigo-700 tab-btn flex items-center gap-2">
+            <div class="flex gap-4 mt-8 overflow-x-auto custom-scrollbar pb-2">
+                <button onclick="switchTab('krizTab')" id="btn-krizTab" class="py-2.5 px-6 rounded-xl font-black text-sm transition-all duration-300 bg-indigo-600 text-white shadow-md border border-indigo-700 tab-btn flex items-center gap-2 whitespace-nowrap">
                     <span class="text-lg">🚨</span> Gün Sonu Raporları
                 </button>
-                <button onclick="switchTab('fireTab')" id="btn-fireTab" class="py-2.5 px-6 rounded-xl font-black text-sm transition-all duration-300 bg-white text-gray-500 hover:bg-gray-100 border border-gray-200 tab-btn flex items-center gap-2">
+                <button onclick="switchTab('fireTab')" id="btn-fireTab" class="py-2.5 px-6 rounded-xl font-black text-sm transition-all duration-300 bg-white text-gray-500 hover:bg-gray-100 border border-gray-200 tab-btn flex items-center gap-2 whitespace-nowrap">
                     <span class="text-lg">🔥</span> Fire Takibi
+                </button>
+                <button onclick="switchTab('ikTab')" id="btn-ikTab" class="py-2.5 px-6 rounded-xl font-black text-sm transition-all duration-300 bg-white text-gray-500 hover:bg-gray-100 border border-gray-200 tab-btn flex items-center gap-2 whitespace-nowrap">
+                    <span class="text-lg">👥</span> İK & Devamsızlık (Vukuat)
                 </button>
             </div>
         </div>
@@ -37,13 +41,13 @@
                 {% for rapor in raporlar %}
                 <div class="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden relative">
                     {% if rapor.yemek_yetmedi > 0 %}
-                    <div class="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-black uppercase tracking-widest px-6 py-2 rounded-bl-3xl">🚨 Kriz Raporlandı</div>
+                    <div class="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-black uppercase tracking-widest px-6 py-2 rounded-bl-3xl shadow-sm">🚨 Kriz Raporlandı</div>
                     {% endif %}
 
                     <div class="p-8 border-b border-gray-50 flex flex-col md:flex-row justify-between md:items-center gap-4 bg-gray-50/50">
                         <div>
                             <span class="text-sm font-black text-indigo-600 block mb-1 uppercase tracking-widest">{{ rapor.ogun }}</span>
-                            <h3 class="text-2xl font-black text-gray-800">{{ rapor.tarih }}</h3>
+                            <h3 class="text-2xl font-black text-gray-800">{{ rapor.tarih | tarih_tr }}</h3>
                         </div>
                         
                         <div class="flex gap-4">
@@ -70,16 +74,16 @@
                             <h4 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2"><span>🍽️</span> O Gün Çıkan Yemekler</h4>
                             <div class="space-y-2">
                                 {% for u in rapor.uretimler %}
-                                    <div class="flex justify-between items-center p-3 rounded-xl border {% if u.kategori == 'Takviye' %}bg-rose-50 border-rose-200{% else %}bg-gray-50 border-gray-100{% endif %}">
+                                    <div class="flex justify-between items-center p-3 rounded-xl border {% if u.kategori == 'Takviye' %}bg-rose-50 border-rose-200{% else %}bg-gray-50 border-gray-100{% endif %} transition hover:bg-slate-50">
                                         <div>
                                             <span class="font-black text-gray-800 text-sm block">{{ u.yemek_adi }}</span>
-                                            <span class="text-[10px] font-bold text-gray-500 uppercase">
+                                            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-0.5 block">
                                                 {% if u.kategori == 'Takviye' %}<b class="text-rose-500">🚨 TAKVİYE ÜRETİM</b>{% else %}{{ u.kategori }}{% endif %}
                                             </span>
                                         </div>
                                         <div class="text-right">
-                                            <span class="block text-[10px] text-gray-400 font-black uppercase">Üretilen</span>
-                                            <span class="font-black text-gray-800">{{ u.planlanan_kisi }} <small class="text-[10px]">Pors.</small></span>
+                                            <span class="block text-[10px] text-gray-400 font-black uppercase tracking-widest">Üretilen</span>
+                                            <span class="font-black text-gray-800 text-base">{{ u.planlanan_kisi }} <small class="text-[10px]">Pors.</small></span>
                                         </div>
                                     </div>
                                 {% else %}
@@ -90,14 +94,17 @@
 
                         <div class="space-y-6">
                             {% if rapor.yemek_yetmedi > 0 %}
-                            <div class="bg-red-50 p-6 rounded-2xl border border-red-200">
-                                <h4 class="text-xs font-black text-red-600 uppercase tracking-widest mb-2 flex items-center gap-2"><span>🚨</span> Kriz Durumu (Yemek Bitti)</h4>
-                                <p class="text-sm font-bold text-red-900 mb-2">Belirtilen Öğünde <b class="text-xl mx-1 bg-white px-2 rounded">{{ rapor.yemek_yetmedi }}</b> Kişi Aç Kaldı / Yetişmedi.</p>
-                                <p class="text-xs text-red-700 bg-white p-3 rounded-lg border border-red-100 shadow-inner"><b>Alınan Aksiyon (Alternatif):</b> {{ rapor.alternatif_detay }}</p>
+                            <div class="bg-rose-50 p-6 rounded-2xl border border-rose-200 shadow-inner">
+                                <h4 class="text-xs font-black text-rose-600 uppercase tracking-widest mb-2 flex items-center gap-2"><span>🚨</span> Kriz Durumu (Yemek Bitti)</h4>
+                                <p class="text-sm font-bold text-rose-900 mb-4">Belirtilen Öğünde <b class="text-2xl mx-1.5 bg-white px-3 py-1 rounded-lg shadow-sm">{{ rapor.yemek_yetmedi }}</b> Kişi Aç Kaldı / Yetişmedi.</p>
+                                <div class="bg-white p-4 rounded-xl border border-rose-100 shadow-sm">
+                                    <span class="block text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">Alınan Aksiyon (Alternatif)</span>
+                                    <p class="text-xs text-slate-700 font-bold leading-relaxed">{{ rapor.alternatif_detay }}</p>
+                                </div>
                             </div>
                             {% else %}
-                            <div class="bg-emerald-50 p-6 rounded-2xl border border-emerald-200 h-full flex flex-col justify-center items-center text-center">
-                                <span class="text-4xl mb-2">✅</span>
+                            <div class="bg-emerald-50 p-6 rounded-2xl border border-emerald-200 h-full flex flex-col justify-center items-center text-center shadow-inner">
+                                <span class="text-5xl mb-3 opacity-80">✅</span>
                                 <h4 class="text-sm font-black text-emerald-700 uppercase tracking-widest mb-1">Sorunsuz Gün</h4>
                                 <p class="text-xs text-emerald-600 font-bold">Bu öğünde herhangi bir kriz veya yemek yetmeme durumu raporlanmamıştır.</p>
                             </div>
@@ -116,13 +123,13 @@
 
         <div id="fireTab" class="tab-content hidden">
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-7xl mx-auto">
-                <div class="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col items-center justify-start h-[550px]">
+                <div class="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col items-center justify-start h-[600px]">
                     <div class="w-full text-left mb-8 border-b border-gray-100 pb-4">
                         <h3 class="font-black text-gray-800 text-lg flex items-center gap-2"><span class="text-2xl">📊</span> Kategori Bazlı Fire Dağılımı</h3>
-                        <p class="text-gray-400 text-xs font-bold mt-1">Hangi malzeme grubundan ne kadar kayıp verildi?</p>
+                        <p class="text-gray-400 text-xs font-bold mt-1 uppercase tracking-widest">Hangi malzeme grubundan ne kadar kayıp verildi?</p>
                     </div>
                     {% if fire_kategori_verisi %}
-                    <div class="relative w-full max-w-[320px]">
+                    <div class="relative w-full max-w-[350px] flex-1">
                         <canvas id="fireKategoriChart"></canvas>
                     </div>
                     {% else %}
@@ -133,33 +140,32 @@
                     {% endif %}
                 </div>
 
-                <div class="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col h-[550px]">
-                    <div class="border-b border-gray-100 pb-4 mb-4">
+                <div class="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col h-[600px]">
+                    <div class="border-b border-gray-100 pb-4 mb-4 flex justify-between items-center">
                         <h3 class="font-black text-gray-800 text-lg flex items-center gap-2"><span class="text-2xl">📝</span> Detaylı Fire Kayıtları</h3>
+                        <span class="bg-orange-50 text-orange-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest">{{ fire_detay_verisi|length }} Kayıt</span>
                     </div>
                     <div class="flex-1 overflow-y-auto custom-scrollbar pr-2">
                         <table class="w-full text-left text-sm whitespace-nowrap">
-                            <thead class="text-gray-400 uppercase text-[10px] tracking-widest sticky top-0 bg-white z-10">
-                                <tr>
-                                    <th class="pb-4">Tarih</th>
-                                    <th class="pb-4">Ürün & Kategori</th>
-                                    <th class="pb-4">Fire</th>
-                                    <th class="pb-4">Açıklama</th>
-                                </tr>
+                            <thead class="text-gray-400 uppercase text-[10px] tracking-widest sticky top-0 bg-white z-10 shadow-sm border-b border-slate-50">
+                                <tr><th class="py-3">Tarih</th><th class="py-3">Ürün & Kategori</th><th class="py-3">Fire</th><th class="py-3 text-right">Açıklama</th></tr>
                             </thead>
-                            <tbody class="divide-y divide-gray-100">
+                            <tbody class="divide-y divide-gray-50">
                                 {% for fire in fire_detay_verisi %}
-                                <tr class="hover:bg-orange-50 transition">
-                                    <td class="py-3 text-gray-500 font-bold text-xs">{{ fire.tarih[:16] }}</td>
+                                <tr class="hover:bg-orange-50/50 transition">
+                                    <td class="py-3">
+                                        <span class="text-gray-600 font-bold text-xs block">{{ fire.tarih[:10] | tarih_tr }}</span>
+                                        <span class="text-gray-400 font-black text-[9px] uppercase tracking-widest">{{ fire.tarih[11:16] }}</span>
+                                    </td>
                                     <td class="py-3">
                                         <span class="font-black text-gray-800 block">{{ fire.urun_adi }}</span>
-                                        <span class="text-[9px] font-bold text-gray-400 uppercase">{{ fire.kategori }}</span>
+                                        <span class="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{{ fire.kategori }}</span>
                                     </td>
-                                    <td class="py-3 font-black text-orange-600">{{ fire.miktar }} <span class="text-xs">{{ fire.birim }}</span></td>
-                                    <td class="py-3 text-gray-500 text-xs italic truncate max-w-[150px]">{{ fire.aciklama }}</td>
+                                    <td class="py-3 font-black text-orange-600 text-base">{{ fire.miktar }} <small class="text-[10px]">{{ fire.birim }}</small></td>
+                                    <td class="py-3 text-right text-gray-400 text-[10px] italic font-bold truncate max-w-[120px]" title="{{ fire.aciklama }}">{{ fire.aciklama }}</td>
                                 </tr>
                                 {% else %}
-                                <tr><td colspan="4" class="text-center py-10 text-gray-400 font-bold">Kayıtlı fire bulunmuyor.</td></tr>
+                                <tr><td colspan="4" class="text-center py-10 text-gray-400 font-bold uppercase tracking-widest text-[10px]">Kayıtlı fire bulunmuyor.</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
@@ -168,34 +174,108 @@
             </div>
         </div>
 
+        <div id="ikTab" class="tab-content hidden">
+            <div class="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 max-w-7xl mx-auto flex flex-col h-[650px]">
+                
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-100 pb-6 mb-6 gap-4">
+                    <div>
+                        <h3 class="font-black text-gray-800 text-xl flex items-center gap-2">
+                            <span class="text-3xl">👥</span> Personel Aylık Vukuat Karnesi
+                        </h3>
+                        <p class="text-gray-400 font-bold text-[11px] uppercase tracking-widest mt-1">Geç kalma, devamsızlık ve hastalık raporlarının kişi bazlı aylık toplamları.</p>
+                    </div>
+                    
+                    <form action="/raporlar" method="GET" class="m-0 bg-slate-50 p-2 rounded-xl border border-slate-200 shadow-sm flex items-center w-full sm:w-auto">
+                        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3 mr-3">Arşiv Dönemi:</label>
+                        <input type="month" name="ik_ay" value="{{ secilen_ay }}" class="border-none bg-white py-2 px-4 rounded-lg text-sm font-bold outline-none cursor-pointer text-indigo-700 shadow-sm focus:ring-2 focus:ring-indigo-400 w-full sm:w-auto" onchange="this.form.submit()">
+                    </form>
+                </div>
+
+                <div class="flex-1 overflow-y-auto custom-scrollbar pr-2">
+                    <table class="w-full text-left whitespace-nowrap">
+                        <thead class="bg-slate-50 text-gray-400 uppercase text-[10px] tracking-widest sticky top-0 z-10 shadow-sm border-b border-gray-100">
+                            <tr>
+                                <th class="p-5 pl-6 rounded-tl-xl">Personel Adı</th>
+                                <th class="p-5 text-center">⏰ Toplam Geç Kalma</th>
+                                <th class="p-5 text-center">❌ Toplam Gelmeme</th>
+                                <th class="p-5 text-center">🏥 Alınan Rapor Sayısı</th>
+                                <th class="p-5 text-center rounded-tr-xl">🤕 Toplam Raporlu Gün</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-50 text-sm font-bold">
+                            {% for ik in ik_ozet_listesi %}
+                            <tr class="hover:bg-slate-50/50 transition">
+                                <td class="p-5 pl-6 text-slate-800">{{ ik.ad_soyad }}</td>
+                                
+                                <td class="p-5 text-center">
+                                    {% if ik.gec_gelme > 0 %}
+                                        <span class="bg-orange-50 text-orange-600 border border-orange-100 px-3 py-1.5 rounded-lg text-[10px] uppercase tracking-widest shadow-sm">{{ ik.gec_gelme }} Kez</span>
+                                    {% else %}
+                                        <span class="text-gray-300">-</span>
+                                    {% endif %}
+                                </td>
+                                
+                                <td class="p-5 text-center">
+                                    {% if ik.gelmeme > 0 %}
+                                        <span class="bg-rose-50 text-rose-600 border border-rose-100 px-3 py-1.5 rounded-lg text-[10px] uppercase tracking-widest shadow-sm">{{ ik.gelmeme }} Gün</span>
+                                    {% else %}
+                                        <span class="text-gray-300">-</span>
+                                    {% endif %}
+                                </td>
+                                
+                                <td class="p-5 text-center">
+                                    {% if ik.rapor_sayisi > 0 %}
+                                        <span class="bg-sky-50 text-sky-600 border border-sky-100 px-3 py-1.5 rounded-lg text-[10px] uppercase tracking-widest shadow-sm">{{ ik.rapor_sayisi }} Rapor</span>
+                                    {% else %}
+                                        <span class="text-gray-300">-</span>
+                                    {% endif %}
+                                </td>
+                                
+                                <td class="p-5 text-center">
+                                    {% if ik.rapor_gun > 0 %}
+                                        <span class="bg-indigo-50 text-indigo-600 border border-indigo-100 px-3 py-1.5 rounded-lg text-[10px] uppercase tracking-widest shadow-sm">{{ ik.rapor_gun }} Gün</span>
+                                    {% else %}
+                                        <span class="text-gray-300">-</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="5" class="text-center py-20">
+                                <span class="text-5xl opacity-20 block mb-4">🏢</span>
+                                <span class="text-gray-400 font-black text-xs uppercase tracking-widest">Seçili ay içerisinde devamsızlık veya rapor kaydı bulunmuyor.</span>
+                            </td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <script>
-        // SEKME DEĞİŞTİRME FONKSİYONU
+        // YENİ SEKME DEĞİŞTİRME FONKSİYONU
         function switchTab(tabId) {
-            // Tüm sekmeleri gizle
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
             
-            // Butonların tasarımını sıfırla (Pasif duruma getir)
             document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.className = "py-2.5 px-6 rounded-xl font-black text-sm transition-all duration-300 bg-white text-gray-500 hover:bg-gray-100 border border-gray-200 tab-btn flex items-center gap-2";
+                btn.className = "py-2.5 px-6 rounded-xl font-black text-sm transition-all duration-300 bg-white text-gray-500 hover:bg-gray-100 border border-gray-200 tab-btn flex items-center gap-2 whitespace-nowrap";
             });
             
-            // İlgili sekmeyi göster
             document.getElementById(tabId).classList.remove('hidden');
             
-            // Tıklanan butonu renklendir
             const activeBtn = document.getElementById('btn-' + tabId);
             if (tabId === 'krizTab') {
-                activeBtn.className = "py-2.5 px-6 rounded-xl font-black text-sm transition-all duration-300 bg-indigo-600 text-white shadow-md border border-indigo-700 tab-btn flex items-center gap-2";
+                activeBtn.className = "py-2.5 px-6 rounded-xl font-black text-sm transition-all duration-300 bg-indigo-600 text-white shadow-md border border-indigo-700 tab-btn flex items-center gap-2 whitespace-nowrap";
             } else if (tabId === 'fireTab') {
-                activeBtn.className = "py-2.5 px-6 rounded-xl font-black text-sm transition-all duration-300 bg-orange-600 text-white shadow-md border border-orange-700 tab-btn flex items-center gap-2";
+                activeBtn.className = "py-2.5 px-6 rounded-xl font-black text-sm transition-all duration-300 bg-orange-600 text-white shadow-md border border-orange-700 tab-btn flex items-center gap-2 whitespace-nowrap";
+            } else if (tabId === 'ikTab') {
+                activeBtn.className = "py-2.5 px-6 rounded-xl font-black text-sm transition-all duration-300 bg-rose-600 text-white shadow-md border border-rose-700 tab-btn flex items-center gap-2 whitespace-nowrap";
             }
         }
 
-        // FİRE GRAFİĞİ ÇİZİM KODLARI (Chart.js)
+        // FİRE GRAFİĞİ ÇİZİM KODLARI
         const rawFireData = {{ fire_kategori_verisi | tojson | safe }};
-        
         if (rawFireData && rawFireData.length > 0 && document.getElementById('fireKategoriChart')) {
             const fireLabels = rawFireData.map(d => d.kategori + ' (' + d.birim + ')');
             const fireValues = rawFireData.map(d => d.toplam_miktar);
@@ -216,10 +296,7 @@
                     maintainAspectRatio: false,
                     cutout: '70%',
                     plugins: {
-                        legend: { 
-                            position: 'bottom', 
-                            labels: { padding: 20, font: { family: 'sans-serif', weight: 'bold', size: 12 } } 
-                        }
+                        legend: { position: 'bottom', labels: { padding: 20, font: { family: 'sans-serif', weight: 'bold', size: 12 } } }
                     }
                 }
             });

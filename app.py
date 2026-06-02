@@ -10,6 +10,18 @@ app = Flask(__name__)
 app.secret_key = "yemekhane_gizli_anahtar_2026"
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 
+# --- EKRAN İÇİN TÜRKÇE TARİH ÇEVİRMENİ ---
+@app.template_filter('tarih_tr')
+def tarih_tr_format(deger):
+    if not deger or deger == '-':
+        return deger
+    try:
+        # Gelen YYYY-MM-DD verisini GG.MM.YYYY formatına çevirir
+        d = datetime.strptime(deger[:10], '%Y-%m-%d')
+        return d.strftime('%d.%m.%Y')
+    except:
+        return deger
+# ----------------------------------------
 # ==========================================
 # 🧠 AKILLI SİSTEM KONTROL VE BİLDİRİM MOTORU
 # ==========================================
@@ -1067,6 +1079,18 @@ def satis():
     f_tahsilat = request.args.get('f_tahsilat', 'Tümü')
     mevcut_ay = secilen_tarih[:7]
 
+    # --- OTOMATİK VERİTABANI GÜNCELLEMESİ (Sütunlar yoksa ekler) ---
+    try: conn.execute("ALTER TABLE etkinlikler ADD COLUMN belge_yolu TEXT"); conn.commit()
+    except: pass
+    try: conn.execute("ALTER TABLE dis_paydas_satis ADD COLUMN dekont_yolu TEXT"); conn.commit()
+    except: pass
+
+    # Dosyaların kaydedileceği klasörlerin var olduğundan emin ol
+    os.makedirs('static/uploads/belgeler', exist_ok=True)
+    os.makedirs('static/uploads/dekontlar', exist_ok=True)
+    from werkzeug.utils import secure_filename
+    import time
+
     if request.method == 'POST':
         islem = request.form.get('islem_tipi')
 
@@ -1083,6 +1107,15 @@ def satis():
             grup_adi = request.form.get('adi')
             kampus = request.form.get('kampus', 'Davutpaşa Merkez')
             turu = request.form.get('turu', 'Dış Paydaş')
+
+            # Dekont Yükleme İşlemi
+            dekont = request.files.get('dekont')
+            dekont_yolu = ""
+            if dekont and dekont.filename:
+                filename = f"{int(time.time())}_{secure_filename(dekont.filename)}"
+                path = os.path.join('static/uploads/dekontlar', filename)
+                dekont.save(path)
+                dekont_yolu = f"/static/uploads/dekontlar/{filename}"
 
             genel_toplam_tutar = 0
             genel_toplam_kisi = 0
@@ -1105,8 +1138,8 @@ def satis():
                 yazilacak_tarife = f"{float(tarifeler[0])} TL" if len(detay_log) == 1 else "Karma Paket"
                 detay_str = " | ".join(detay_log)
 
-                conn.execute('''INSERT INTO dis_paydas_satis (tarih, ogun, turu, adi, kisi_sayisi, tarife, odeme_yontemi, toplam_tutar, kampus, tahsilat_durumu, firma_odeme_durumu) VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
-                             (islem_tarihi, yazilacak_ogun, turu, grup_adi, genel_toplam_kisi, yazilacak_tarife, detay_str, genel_toplam_tutar, kampus, t_durumu, f_durumu))
+                conn.execute('''INSERT INTO dis_paydas_satis (tarih, ogun, turu, adi, kisi_sayisi, tarife, odeme_yontemi, toplam_tutar, kampus, tahsilat_durumu, firma_odeme_durumu, dekont_yolu) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''',
+                             (islem_tarihi, yazilacak_ogun, turu, grup_adi, genel_toplam_kisi, yazilacak_tarife, detay_str, genel_toplam_tutar, kampus, t_durumu, f_durumu, dekont_yolu))
 
             if bagli_id:
                 conn.execute("UPDATE etkinlikler SET durum='Satışa Aktarıldı' WHERE id=?", (bagli_id,))
@@ -1115,17 +1148,27 @@ def satis():
                     conn.execute("UPDATE ajanda SET not_icerik=? WHERE id=?", (f"✅ GERÇEKLEŞTİ: {grup_adi}", ajanda_kayit['id']))
                     conn.execute("INSERT INTO ajanda_tamamlananlar (ajanda_id, tarih) VALUES (?,?)", (ajanda_kayit['id'], islem_tarihi))
 
-            conn.commit(); flash(f"✅ {grup_adi} (Top: {genel_toplam_kisi} Kişi, {genel_toplam_tutar} ₺) tek kalem olarak işlendi.", "success")
+            conn.commit(); flash(f"✅ {grup_adi} işlemi başarıyla kaydedildi.", "success")
 
         elif islem == 'etkinlik_ekle':
             tarih = request.form['tarih']
             kisi = request.form['kisi_sayisi']
             adi = request.form['adi']
-            conn.execute("INSERT INTO etkinlikler (tarih, bitis_tarihi, adi, kisi_sayisi, notlar, kampus, ogun) VALUES (?,?,?,?,?,?,?)",
-                         (tarih, request.form.get('bitis_tarihi'), adi, int(kisi), request.form.get('notlar', ''), request.form.get('kampus', 'Davutpaşa Merkez'), request.form.get('ogun', 'Öğle Yemeği')))
+
+            # Belge Yükleme İşlemi
+            belge = request.files.get('belge')
+            belge_yolu = ""
+            if belge and belge.filename:
+                filename = f"{int(time.time())}_{secure_filename(belge.filename)}"
+                path = os.path.join('static/uploads/belgeler', filename)
+                belge.save(path)
+                belge_yolu = f"/static/uploads/belgeler/{filename}"
+
+            conn.execute("INSERT INTO etkinlikler (tarih, bitis_tarihi, adi, kisi_sayisi, notlar, kampus, ogun, belge_yolu) VALUES (?,?,?,?,?,?,?,?)",
+                         (tarih, request.form.get('bitis_tarihi'), adi, int(kisi), request.form.get('notlar', ''), request.form.get('kampus', 'Davutpaşa Merkez'), request.form.get('ogun', 'Öğle Yemeği'), belge_yolu))
             conn.execute("INSERT INTO ajanda (tarih, not_icerik, renk_kodu, url, bitis_tarihi, periyot) VALUES (?,?,?,?,?,?)",
-                         (tarih, f"🎉 ETKİNLİK: {adi} ({kisi} Kişi)", '#10b981', '/satis', request.form.get('bitis_tarihi', ''), 'Günlük' if request.form.get('bitis_tarihi') else 'Tek Seferlik'))
-            conn.commit(); flash("🎉 Etkinlik planlandı ve Ajandaya eklendi.", "success")
+                         (tarih, f"🎉 ETKİNLİK: {adi} ({kisi} Kişi)", '#4f46e5', '/satis', request.form.get('bitis_tarihi', ''), 'Günlük' if request.form.get('bitis_tarihi') else 'Tek Seferlik'))
+            conn.commit(); flash("Planlama tamamlandı ve belge arşivlendi.", "success")
 
         elif islem == 'durum_guncelle':
             satis_id = request.form.get('satis_id')
@@ -1139,27 +1182,24 @@ def satis():
                 yeni_durum = request.form.get('yeni_durum')
                 if hedef == 'tahsilat': conn.execute("UPDATE dis_paydas_satis SET tahsilat_durumu=? WHERE id=?", (yeni_durum, satis_id))
                 elif hedef == 'firma': conn.execute("UPDATE dis_paydas_satis SET firma_odeme_durumu=? WHERE id=?", (yeni_durum, satis_id))
-            conn.commit(); flash("✅ Ödeme durumları başarıyla güncellendi.", "success")
+            conn.commit(); flash("Ödeme durumu güncellendi.", "success")
 
         elif islem == 'dis_paydas_sil':
             conn.execute('DELETE FROM dis_paydas_satis WHERE id=?', (request.form['kayit_id'],)); conn.commit()
-
-            # Eğer istek arka plandan (AJAX) geldiyse sayfa yenileme, JSON dön
             if request.form.get('ajax') == 'true':
                 from flask import jsonify
                 return jsonify({"status": "success"})
-
             flash("Kayıt silindi.", "success")
 
         elif islem == 'etkinlik_sil':
             e_id = request.form['etkinlik_id']
             etk = conn.execute("SELECT * FROM etkinlikler WHERE id=?", (e_id,)).fetchone()
             if etk: conn.execute("DELETE FROM ajanda WHERE not_icerik LIKE ?", (f"%{etk['adi']}%",))
-            conn.execute("DELETE FROM etkinlikler WHERE id=?", (e_id,)); conn.commit(); flash("Etkinlik iptal edildi ve Ajandadan silindi.", "success")
+            conn.execute("DELETE FROM etkinlikler WHERE id=?", (e_id,)); conn.commit(); flash("Etkinlik ve bağlı ajanda kaydı silindi.", "success")
 
         return redirect(url_for('satis', tarih=request.form.get('islem_tarihi', secilen_tarih), f_kampus=f_kampus, f_fiyat=f_fiyat, f_tahsilat=f_tahsilat))
 
-    # --- 1. SEKME MANTIĞI: Sadece Kapanmamış Açık Hesaplar (Tarih Bağımsız) ---
+    # Satış Listesi
     dis_paydaslar = conn.execute("""
         SELECT * FROM dis_paydas_satis
         WHERE NOT (
@@ -1170,14 +1210,14 @@ def satis():
         ORDER BY tarih DESC, id DESC
     """).fetchall()
 
-    etkinlikler = conn.execute('SELECT * FROM etkinlikler ORDER BY tarih ASC').fetchall()
+    # YENİ: Etkinlikler son eklenen en üste gelsin diye ORDER BY id DESC yapıldı
+    etkinlikler = conn.execute('SELECT * FROM etkinlikler ORDER BY id DESC').fetchall()
 
-    # Bilanço Sorgusu: Sadece ödemesi alınmış VE firmaya yatırılmış/kendi stoğumuz olanları getir
+    # Bilanço Sorgusu
     query = "SELECT * FROM dis_paydas_satis WHERE tarih LIKE ?"
     params = [f"{mevcut_ay}%"]
 
     if f_tahsilat == 'Tümü':
-        # Varsayılan görünüm: Sadece tam kapanmış hesaplar (Kapatılmamışlar bilançoya düşmesin)
         query += " AND (tahsilat_durumu LIKE '✅%' OR tahsilat_durumu LIKE '🎁%') AND (firma_odeme_durumu LIKE '✅%' OR firma_odeme_durumu LIKE '❌%')"
     elif f_tahsilat == 'Vakıf':
         query += " AND tahsilat_durumu LIKE ?"; params.append("%Vakıf%")
@@ -1192,6 +1232,7 @@ def satis():
     gelenler_aylik = conn.execute(query, params).fetchall()
     conn.close()
     return render_template('satis.html', dis_paydaslar=dis_paydaslar, etkinlikler=etkinlikler, gelenler_aylik=gelenler_aylik, secilen_tarih=secilen_tarih, f_kampus=f_kampus, f_fiyat=f_fiyat, f_tahsilat=f_tahsilat)
+
 @app.route('/et-isleme', methods=['GET', 'POST'])
 @login_required
 @admin_required
@@ -1512,30 +1553,71 @@ def raporlar():
     fire_kategori_verisi = conn.execute("SELECT kategori, SUM(miktar) as toplam_miktar, birim FROM fire_kayitlari GROUP BY kategori, birim").fetchall()
     fire_detay_verisi = conn.execute("SELECT urun_adi, kategori, miktar, birim, tarih, kullanici, aciklama FROM fire_kayitlari ORDER BY tarih DESC LIMIT 100").fetchall()
 
-    # YENİ: İK VE DEVAMSIZLIK VERİLERİ (Geç kalan, gelmeyen, raporlu)
-    ik_vukuat_listesi = conn.execute('''
-        SELECT p.ad_soyad, l.tarih, l.durum as vukuat_turu
+    # ==========================================
+    # YENİ: İK (AYLIK KONSOLİDE VUKUAT) ANALİZİ
+    # ==========================================
+    bugun = date.today()
+    mevcut_ay = bugun.strftime('%Y-%m')
+    secilen_ay = request.args.get('ik_ay', mevcut_ay) # URL'den 'ik_ay' parametresini alır (Örn: 2026-05)
+
+    # 1. PDKS Loglarından Geç Gelme ve Gelmeme Toplamları
+    vukuatlar_raw = conn.execute('''
+        SELECT p.id, p.ad_soyad, l.durum, COUNT(l.id) as adet
         FROM pdks_log l
         JOIN personeller p ON l.personel_id = p.id
-        WHERE l.durum IN ('Geç Geldi', 'Gelmedi')
-        ORDER BY l.tarih DESC LIMIT 100
-    ''').fetchall()
+        WHERE l.tarih LIKE ? AND l.durum IN ('Geç Geldi', 'Gelmedi')
+        GROUP BY p.id, p.ad_soyad, l.durum
+    ''', (f"{secilen_ay}%",)).fetchall()
 
-    ik_raporlular = conn.execute('''
-        SELECT p.ad_soyad, i.baslangic_tarihi, i.bitis_tarihi, i.izin_turu as vukuat_turu, i.aciklama 
+    # 2. İzinlerden Hastalık Raporları (Başlangıç tarihi seçili aya düşenler)
+    raporlar_raw = conn.execute('''
+        SELECT p.id, p.ad_soyad, i.baslangic_tarihi, i.bitis_tarihi
         FROM personel_izinler i
         JOIN personeller p ON i.personel_id = p.id
-        WHERE i.izin_turu = 'Hastalık Raporu'
-        ORDER BY i.baslangic_tarihi DESC LIMIT 100
-    ''').fetchall()
+        WHERE i.izin_turu = 'Hastalık Raporu' AND i.baslangic_tarihi LIKE ?
+    ''', (f"{secilen_ay}%",)).fetchall()
+
+    ik_ozet = {}
+
+    # Vukuatları sözlüğe (Kişi Kartına) işle
+    for v in vukuatlar_raw:
+        pid = v['id']
+        if pid not in ik_ozet:
+            ik_ozet[pid] = {'ad_soyad': v['ad_soyad'], 'gec_gelme': 0, 'gelmeme': 0, 'rapor_sayisi': 0, 'rapor_gun': 0}
+        
+        if v['durum'] == 'Geç Geldi':
+            ik_ozet[pid]['gec_gelme'] += v['adet']
+        elif v['durum'] == 'Gelmedi':
+            ik_ozet[pid]['gelmeme'] += v['adet']
+
+    # Raporları sözlüğe işle ve Rapor Gününü hesapla
+    from datetime import datetime
+    for r in raporlar_raw:
+        pid = r['id']
+        if pid not in ik_ozet:
+            ik_ozet[pid] = {'ad_soyad': r['ad_soyad'], 'gec_gelme': 0, 'gelmeme': 0, 'rapor_sayisi': 0, 'rapor_gun': 0}
+        
+        try:
+            b = datetime.strptime(r['baslangic_tarihi'], '%Y-%m-%d')
+            e = datetime.strptime(r['bitis_tarihi'], '%Y-%m-%d')
+            gun = (e - b).days + 1
+            if gun < 1: gun = 1
+        except:
+            gun = 1
+            
+        ik_ozet[pid]['rapor_sayisi'] += 1
+        ik_ozet[pid]['rapor_gun'] += gun
+
+    # Kişi listesini isme göre alfabetik sırala
+    ik_ozet_listesi = sorted(ik_ozet.values(), key=lambda x: x['ad_soyad'])
 
     conn.close()
     return render_template('raporlar.html',
                            raporlar=rapor_listesi,
                            fire_kategori_verisi=[dict(row) for row in fire_kategori_verisi],
                            fire_detay_verisi=[dict(row) for row in fire_detay_verisi],
-                           ik_vukuat_listesi=[dict(row) for row in ik_vukuat_listesi],
-                           ik_raporlular=[dict(row) for row in ik_raporlular])
+                           ik_ozet_listesi=ik_ozet_listesi,
+                           secilen_ay=secilen_ay)
 
 @app.route('/uretim-fire-ekle', methods=['POST'])
 @login_required
