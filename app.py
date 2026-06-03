@@ -1274,11 +1274,15 @@ def satis():
 def et_isleme():
     conn = get_db_connection()
 
+    # --- SÜTUN GÜVENLİK KALKANLARI ---
     try: conn.execute("ALTER TABLE et_isleme_log ADD COLUMN lot_id INTEGER")
+    except: pass
+    try: conn.execute("ALTER TABLE et_isleme_log ADD COLUMN kullanilan_alan TEXT")
     except: pass
 
     if request.method == 'POST':
         lot_id = request.form.get('kaynak_lot_id')
+        kullanilan_alan = request.form.get('kullanilan_alan', '').strip()
 
         def guvenli_float(deger):
             try: return float(deger) if deger else 0.0
@@ -1287,9 +1291,9 @@ def et_isleme():
         harcanan = guvenli_float(request.form.get('harcanan_miktar'))
         kiymalik = guvenli_float(request.form.get('kiymalik'))
         kusbasi = guvenli_float(request.form.get('kusbasi'))
-        kemikli = guvenli_float(request.form.get('kemikli')) # YENİ: Sote kalktı, Kemikli geldi
-        kemik = guvenli_float(request.form.get('kemik'))     # AYRILDI: Temiz Kemik (Kemik suyu vb.)
-        fire = guvenli_float(request.form.get('fire'))       # AYRILDI: Çöp (Depoya girmez)
+        kemikli = guvenli_float(request.form.get('kemikli')) 
+        kemik = guvenli_float(request.form.get('kemik'))     
+        fire = guvenli_float(request.form.get('fire'))       
 
         lot = conn.execute("SELECT * FROM stok_lotlari WHERE id=?", (lot_id,)).fetchone()
 
@@ -1305,25 +1309,23 @@ def et_isleme():
 
         kategori = "🥩 Kırmızı Et"
 
-        # DEPOYA GİRENLER (Sote yok, Fire yok)
         for urun, mik in [('Dana Kıyma', kiymalik), ('Dana Kuşbaşı', kusbasi), ('Kemikli Et', kemikli), ('Dana Kemik', kemik)]:
             if mik > 0:
                 mevcut = conn.execute('SELECT id FROM depo WHERE urun_adi COLLATE NOCASE = ?', (urun,)).fetchone()
                 if mevcut: conn.execute('UPDATE depo SET miktar = miktar + ? WHERE id=?', (mik, mevcut['id']))
                 else: conn.execute('INSERT INTO depo (kategori, urun_adi, miktar, birim) VALUES (?,?,?,?)', (kategori, urun, mik, 'KG'))
 
-        # ÇÖPE GİDEN FİRE (Depoya girmez, Raporlar için Fire tablosuna eklenir)
         if fire > 0:
             conn.execute('INSERT INTO fire_kayitlari (kategori, urun_adi, miktar, birim, kullanici, aciklama) VALUES (?, ?, ?, ?, ?, ?)',
                          (kategori, "Karkas Parçalama Firesi", fire, "KG", session.get('isim', 'Sistem'), f"Damga No: {damga_no}"))
 
-        # İZLENEBİLİRLİK (Damga numarasıyla her şeyin kaydı tek logda)
         kaynak_detay = f"{kaynak_urun_adi} [Damga: {damga_no}]"
         detay_str = f"Kıyma: {kiymalik} | Kuşbaşı: {kusbasi} | Kemikli: {kemikli} | Kemik: {kemik} | Fire: {fire}"
-        conn.execute('INSERT INTO et_isleme_log (kaynak, harcanan, detay, lot_id) VALUES (?,?,?,?)',
-                     (kaynak_detay, harcanan, detay_str, lot_id))
+        
+        conn.execute('INSERT INTO et_isleme_log (kaynak, harcanan, detay, lot_id, kullanilan_alan) VALUES (?,?,?,?,?)',
+                     (kaynak_detay, harcanan, detay_str, lot_id, kullanilan_alan))
 
-        conn.commit(); flash(f"✅ {damga_no} damgalı karkas başarıyla parçalandı ve fireler ayrıştırıldı.", "success")
+        conn.commit(); flash(f"✅ {damga_no} damgalı karkas başarıyla parçalandı.", "success")
         return redirect(url_for('et_isleme'))
 
     et_stoklari = conn.execute("""
@@ -1334,7 +1336,14 @@ def et_isleme():
         ORDER BY sl.tarih ASC
     """).fetchall()
 
-    gecmis_islemler = conn.execute("SELECT * FROM et_isleme_log ORDER BY id DESC LIMIT 5").fetchall()
+    # ZIRHLI GEÇMİŞ LOG ALANI
+    gecmis_islemler_raw = conn.execute("SELECT * FROM et_isleme_log ORDER BY id DESC LIMIT 5").fetchall()
+    gecmis_islemler = []
+    for row in gecmis_islemler_raw:
+        r_dict = dict(row)
+        if 'kullanilan_alan' not in r_dict:
+            r_dict['kullanilan_alan'] = '-'
+        gecmis_islemler.append(r_dict)
 
     son_sevkiyatlar = conn.execute("""
         SELECT sl.* FROM stok_lotlari sl
@@ -1346,7 +1355,6 @@ def et_isleme():
     lot_karneleri = []
     for l in son_sevkiyatlar:
         loglar = conn.execute("SELECT harcanan, detay FROM et_isleme_log WHERE lot_id=?", (l['id'],)).fetchall()
-        # Sote gitti. Kemikli ve Fire'nin ilk değeri 0 olarak eklendi:
         t_harcanan = 0; t_kiyma = 0; t_kusbasi = 0; t_kemikli = 0; t_kemik = 0; t_fire = 0
         for lg in loglar:
             t_harcanan += lg['harcanan']
@@ -1355,12 +1363,12 @@ def et_isleme():
             except: pass
             try: t_kusbasi += float(re.search(r'Kuşbaşı:\s*([\d\.]+)', d).group(1))
             except: pass
-            try: t_kemikli += float(re.search(r'Kemikli:\s*([\d\.]+)', d).group(1)) # Sote gitti Kemikli geldi
+            try: t_kemikli += float(re.search(r'Kemikli:\s*([\d\.]+)', d).group(1)) 
             except: pass
-            try: t_kemik += float(re.search(r'Kemik:\s*([\d\.]+)', d).group(1))     # Sadece Kemik
+            try: t_kemik += float(re.search(r'Kemik:\s*([\d\.]+)', d).group(1))     
             except: pass
-            try: t_fire += float(re.search(r'Fire:\s*([\d\.]+)', d).group(1))       # Sadece Fire
-            except: pass
+            try: t_fire += float(re.search(r'Fire:\s*([\d\.]+)', d).group(1))       
+            except: pass # 🟢 DÜZELTİLDİ: Unutulan except bloğu eklendi!
 
         lot_karneleri.append({
             'id': l['id'], 'tarih': l['tarih'][:10], 'damga': l['lot_damga_no'] if l['lot_damga_no'] else 'DAMGASIZ',

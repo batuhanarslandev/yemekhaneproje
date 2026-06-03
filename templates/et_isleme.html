@@ -13,7 +13,7 @@
         .accordion-content.open { max-height: 500px; opacity: 1; }
     </style>
 </head>
-<body class="bg-gray-50 flex min-h-screen font-sans">
+<body class="bg-gray-50 flex min-h-screen font-sans text-slate-800">
 
     {% include 'sidebar.html' %}
 
@@ -201,6 +201,9 @@
                             </td>
                             <td class="px-8 py-5">
                                 <span class="font-black text-gray-700 block text-sm">{{ log.kaynak }}</span>
+                                {% if log.get('kullanilan_alan') and log.get('kullanilan_alan') != '-' %}
+                                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mt-1">Kullanım Amacı: <b class="text-indigo-600 bg-indigo-50/60 px-1.5 py-0.5 rounded">{{ log.get('kullanilan_alan') }}</b></span>
+                                {% endif %}
                             </td>
                             <td class="px-8 py-5 text-center">
                                 <span class="inline-block bg-red-50 text-red-600 px-4 py-1.5 rounded-full font-black text-sm">
@@ -260,6 +263,11 @@
                                 <span class="absolute bottom-6 right-6 text-gray-300 font-black text-xl">KG</span>
                             </div>
                             <div id="uyariMiktar" class="hidden text-center text-xs font-black text-red-500 uppercase tracking-widest">Uyarı: Lot bakiyesinden fazla girdiniz!</div>
+                            
+                            <div class="relative mt-4">
+                                <label class="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1.5 ml-2">🎯 Kullanılacağı Alan / Menü (Neden?)</label>
+                                <input type="text" name="kullanilan_alan" placeholder="Örn: Nohut Yemeği İçin, Tas Kebabı" required class="w-full border-2 border-gray-100 p-4 rounded-2xl text-sm font-bold bg-slate-50 focus:border-indigo-400 outline-none transition shadow-inner text-indigo-950">
+                            </div>
                         </div>
                     </div>
                     
