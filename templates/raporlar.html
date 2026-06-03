@@ -12,7 +12,7 @@
         .custom-scrollbar:hover::-webkit-scrollbar-thumb { background: #9ca3af; }
     </style>
 </head>
-<body class="bg-gray-50 flex min-h-screen font-sans">
+<body class="bg-gray-50 flex min-h-screen font-sans text-slate-800">
 
     {% include 'sidebar.html' %}
 
@@ -177,7 +177,7 @@
         <div id="ikTab" class="tab-content hidden">
             <div class="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 max-w-7xl mx-auto flex flex-col h-[650px]">
                 
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-100 pb-6 mb-6 gap-4">
+                <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center border-b border-gray-100 pb-6 mb-6 gap-4">
                     <div>
                         <h3 class="font-black text-gray-800 text-xl flex items-center gap-2">
                             <span class="text-3xl">👥</span> Personel Aylık Vukuat Karnesi
@@ -185,10 +185,17 @@
                         <p class="text-gray-400 font-bold text-[11px] uppercase tracking-widest mt-1">Geç kalma, devamsızlık ve hastalık raporlarının kişi bazlı aylık toplamları.</p>
                     </div>
                     
-                    <form action="/raporlar" method="GET" class="m-0 bg-slate-50 p-2 rounded-xl border border-slate-200 shadow-sm flex items-center w-full sm:w-auto">
-                        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3 mr-3">Arşiv Dönemi:</label>
-                        <input type="month" name="ik_ay" value="{{ secilen_ay }}" class="border-none bg-white py-2 px-4 rounded-lg text-sm font-bold outline-none cursor-pointer text-indigo-700 shadow-sm focus:ring-2 focus:ring-indigo-400 w-full sm:w-auto" onchange="this.form.submit()">
-                    </form>
+                    <div class="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+                        <div class="w-full sm:w-auto relative">
+                            <span class="absolute left-3 top-3 text-gray-400 text-sm">🔍</span>
+                            <input type="text" id="ikArama" onkeyup="ikFiltrele()" placeholder="İsme göre personel ara..." class="w-full sm:w-64 pl-9 pr-4 py-2.5 border-2 border-gray-100 rounded-xl text-xs font-bold bg-gray-50 outline-none focus:border-indigo-400 transition shadow-inner">
+                        </div>
+
+                        <form action="/raporlar" method="GET" class="m-0 bg-slate-50 p-2 rounded-xl border border-slate-200 shadow-sm flex items-center w-full sm:w-auto shrink-0">
+                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3 mr-2">Dönem:</label>
+                            <input type="month" name="ik_ay" value="{{ secilen_ay }}" class="border-none bg-white py-1.5 px-3 rounded-lg text-xs font-bold outline-none cursor-pointer text-indigo-700 shadow-sm focus:ring-2 focus:ring-indigo-400 w-full sm:w-auto" onchange="this.form.submit()">
+                        </form>
+                    </div>
                 </div>
 
                 <div class="flex-1 overflow-y-auto custom-scrollbar pr-2">
@@ -198,13 +205,14 @@
                                 <th class="p-5 pl-6 rounded-tl-xl">Personel Adı</th>
                                 <th class="p-5 text-center">⏰ Toplam Geç Kalma</th>
                                 <th class="p-5 text-center">❌ Toplam Gelmeme</th>
+                                <th class="p-5 text-center">⏳ Saatlik İzin</th>
                                 <th class="p-5 text-center">🏥 Alınan Rapor Sayısı</th>
                                 <th class="p-5 text-center rounded-tr-xl">🤕 Toplam Raporlu Gün</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-50 text-sm font-bold">
                             {% for ik in ik_ozet_listesi %}
-                            <tr class="hover:bg-slate-50/50 transition">
+                            <tr class="ik-satir hover:bg-slate-50/50 transition">
                                 <td class="p-5 pl-6 text-slate-800">{{ ik.ad_soyad }}</td>
                                 
                                 <td class="p-5 text-center">
@@ -218,6 +226,14 @@
                                 <td class="p-5 text-center">
                                     {% if ik.gelmeme > 0 %}
                                         <span class="bg-rose-50 text-rose-600 border border-rose-100 px-3 py-1.5 rounded-lg text-[10px] uppercase tracking-widest shadow-sm">{{ ik.gelmeme }} Gün</span>
+                                    {% else %}
+                                        <span class="text-gray-300">-</span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="p-5 text-center">
+                                    {% if ik.saatlik_izin > 0 %}
+                                        <span class="bg-amber-50 text-amber-600 border border-amber-100 px-3 py-1.5 rounded-lg text-[10px] uppercase tracking-widest shadow-sm">{{ ik.saatlik_izin }} Kez</span>
                                     {% else %}
                                         <span class="text-gray-300">-</span>
                                     {% endif %}
@@ -240,7 +256,7 @@
                                 </td>
                             </tr>
                             {% else %}
-                            <tr><td colspan="5" class="text-center py-20">
+                            <tr><td colspan="6" class="text-center py-20">
                                 <span class="text-5xl opacity-20 block mb-4">🏢</span>
                                 <span class="text-gray-400 font-black text-xs uppercase tracking-widest">Seçili ay içerisinde devamsızlık veya rapor kaydı bulunmuyor.</span>
                             </td></tr>
@@ -254,7 +270,6 @@
     </div>
 
     <script>
-        // YENİ SEKME DEĞİŞTİRME FONKSİYONU
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
             
@@ -274,7 +289,21 @@
             }
         }
 
-        // FİRE GRAFİĞİ ÇİZİM KODLARI
+        // 👑 YENİ EKLENEN FİLTRELEME MOTORU (TÜRKÇE KARAKTER DUYARLI)
+        function ikFiltrele() {
+            let input = document.getElementById("ikArama").value.toLocaleLowerCase('tr-TR');
+            let satirlar = document.querySelectorAll(".ik-satir");
+            
+            satirlar.forEach(satir => {
+                let isim = satir.querySelector("td").innerText.toLocaleLowerCase('tr-TR');
+                if (isim.includes(input)) {
+                    satir.style.display = ""; 
+                } else {
+                    satir.style.display = "none"; 
+                }
+            });
+        }
+
         const rawFireData = {{ fire_kategori_verisi | tojson | safe }};
         if (rawFireData && rawFireData.length > 0 && document.getElementById('fireKategoriChart')) {
             const fireLabels = rawFireData.map(d => d.kategori + ' (' + d.birim + ')');

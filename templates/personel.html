@@ -224,7 +224,13 @@
                                         {% if p.id in secilen_izinli_idler %}
                                             <input type="hidden" name="personel_id[]" value="{{ p.id }}">
                                             <input type="hidden" name="durum[]" value="İzinli">
-                                            <span class="bg-sky-50 text-sky-600 border border-sky-200 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest w-full max-w-[200px] inline-block text-center cursor-not-allowed opacity-80 shadow-inner">🏖️ O Gün İzindeydi</span>
+                                            
+                                            <!-- 👑 YENİ: Saatlik İzin ile Tam Gün İzni Ayıran Zeka -->
+                                            {% if secilen_izinler_dict.get(p.id) == 'Saatlik İzin' %}
+                                                <span class="bg-orange-50 text-orange-600 border border-orange-200 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest w-full max-w-[200px] inline-block text-center cursor-not-allowed opacity-80 shadow-inner">⏰ Saatlik İzinli</span>
+                                            {% else %}
+                                                <span class="bg-sky-50 text-sky-600 border border-sky-200 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest w-full max-w-[200px] inline-block text-center cursor-not-allowed opacity-80 shadow-inner">🏖️ O Gün İzindeydi</span>
+                                            {% endif %}
                                         {% else %}
                                             <input type="hidden" name="personel_id[]" value="{{ p.id }}">
                                             {% set mevcut_durum = yoklama_dict.get(p.id, 'Geldi') %}
@@ -315,11 +321,37 @@
                         </div>
                         <div>
                             <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">İzin Türü</label>
-                            <select name="izin_turu" class="w-full border-2 border-slate-100 p-3 rounded-xl text-xs font-bold bg-slate-50 outline-none focus:border-indigo-400 cursor-pointer">
+                            <select name="izin_turu" id="izinTuruSecici" onchange="saatlikIzinKontrol()" class="w-full border-2 border-slate-100 p-3 rounded-xl text-xs font-bold bg-slate-50 outline-none focus:border-indigo-400 cursor-pointer">
                                 <option value="Yıllık İzin">Yıllık İzin (Bakiyeden Düşer)</option>
                                 <option value="Hastalık Raporu">Hastalık Raporu</option>
                                 <option value="Mazeret İzni">Mazeret İzni</option>
+                                <option value="Saatlik İzin">⏰ Saatlik İzin (Günü Kurtarır)</option>
                             </select>
+
+                            <!-- 👑 YENİ: Saatlik İzin Seçildiğinde Tarihleri Eşitleyen Sihirli Kod -->
+                            <script>
+                                function saatlikIzinKontrol() {
+                                    const tur = document.getElementById('izinTuruSecici').value;
+                                    const baslangic = document.getElementsByName('baslangic')[0];
+                                    const bitis = document.getElementsByName('bitis')[0];
+                                    
+                                    if(tur === 'Saatlik İzin') {
+                                        bitis.value = baslangic.value;
+                                        bitis.readOnly = true;
+                                        bitis.classList.add('opacity-50', 'cursor-not-allowed');
+                                        
+                                        // Başlangıç tarihi her değiştiğinde bitişi de senkronize et
+                                        baslangic.addEventListener('input', function() {
+                                            if(document.getElementById('izinTuruSecici').value === 'Saatlik İzin') {
+                                                bitis.value = baslangic.value;
+                                            }
+                                        });
+                                    } else {
+                                        bitis.readOnly = false;
+                                        bitis.classList.remove('opacity-50', 'cursor-not-allowed');
+                                    }
+                                }
+                            </script>
                         </div>
                         <div>
                             <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Açıklama / İzin Nedeni</label>
@@ -648,12 +680,13 @@
                         </ul>
                     </div>
 
+                    <!-- YILLIK / MAZERET İZİNLİLERI -->
                     <div>
                         <h4 class="font-black text-amber-600 border-b border-amber-100 pb-2 mb-3 uppercase tracking-widest text-xs flex items-center gap-2"><span>🏖️</span> İzinli Personeller</h4>
                         <ul class="space-y-2">
                             {% set izinli_say = namespace(value=0) %}
                             {% for iz in tum_izinler %}
-                                {% if secilen_tarih >= iz.baslangic_tarihi and secilen_tarih <= iz.bitis_tarihi and iz.izin_turu != 'Hastalık Raporu' %}
+                                {% if secilen_tarih >= iz.baslangic_tarihi and secilen_tarih <= iz.bitis_tarihi and iz.izin_turu != 'Hastalık Raporu' and iz.izin_turu != 'Saatlik İzin' %}
                                     <li class="text-sm font-bold text-slate-700 flex justify-between bg-amber-50/50 p-2 rounded border border-amber-50">
                                         <span>{{ iz.ad_soyad }}</span>
                                         <span class="text-[10px] text-slate-400 uppercase">{{ iz.izin_turu }}</span>
@@ -662,7 +695,27 @@
                                 {% endif %}
                             {% endfor %}
                             {% if izinli_say.value == 0 %}
-                                <li class="text-xs font-bold text-slate-400 italic">Bu tarihte izinli personel yok.</li>
+                                <li class="text-xs font-bold text-slate-400 italic">Bu tarihte tam gün izinli personel yok.</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+
+                    <!-- 👑 YENİ: SAATLİK İZİNLİLER SEKSİYONU -->
+                    <div>
+                        <h4 class="font-black text-orange-500 border-b border-orange-100 pb-2 mb-3 uppercase tracking-widest text-xs flex items-center gap-2"><span>⏰</span> Saatlik İzin Alan Personeller</h4>
+                        <ul class="space-y-2">
+                            {% set saatlik_say = namespace(value=0) %}
+                            {% for iz in tum_izinler %}
+                                {% if secilen_tarih >= iz.baslangic_tarihi and secilen_tarih <= iz.bitis_tarihi and iz.izin_turu == 'Saatlik İzin' %}
+                                    <li class="text-sm font-bold text-slate-700 flex justify-between bg-orange-50/40 p-2 rounded border border-orange-100">
+                                        <span>{{ iz.ad_soyad }}</span>
+                                        <span class="text-[10px] text-orange-600 bg-orange-50 font-black px-2 py-0.5 rounded border border-orange-200 uppercase tracking-widest">Saatlik İzin</span>
+                                    </li>
+                                    {% set saatlik_say.value = saatlik_say.value + 1 %}
+                                {% endif %}
+                            {% endfor %}
+                            {% if saatlik_say.value == 0 %}
+                                <li class="text-xs font-bold text-slate-400 italic">Bu tarihte saatlik izin almış personel bulunmuyor.</li>
                             {% endif %}
                         </ul>
                     </div>

@@ -639,10 +639,79 @@ def depo():
 
                     conn.execute("INSERT INTO depo_cikis (tarih, ogun, yemek_adi, malzeme_adi, marka, miktar, birim, onay_durumu, aciklama) VALUES (?,?,?,?,?,?,?,'Onaylandı',?)",
                                  (islem_tarihi, ogun_secimi, hedef_yemek, urun_adi, marka, miktar, mevcut['birim'], f"Çıkış: {session['isim']} | {ek_aciklama}"))
-                    flash(f"✅ Mutfağa '{hedef_yemek}' için {miktar} {mevcut['birim']} {urun_adi} ({marka if marka else 'Markasız'}) sevk edildi.", "success")
+                    flash(f"✅ Mutfağa '{hedef_yemek}' için {miktar} {mevcut['birim']} {urun_adi} sevk edildi.", "success")
             else:
                 flash(f"Hata: Depoda yeterli miktar bulunmuyor!", "error")
 
+        # 👑 YENİ: REÇETEYE GÖRE TOPLU MALZEME ÇIKIŞI (Yapay Zeka Mantığı)
+        elif islem == 'toplu_recete_cikisi':
+            hedef_uretim_val = request.form['toplu_uretim']
+            porsiyon = int(request.form['porsiyon'])
+            
+            if not hedef_uretim_val or porsiyon <= 0:
+                flash("Lütfen hedef üretimi seçip geçerli bir porsiyon girin!", "error")
+                return redirect(url_for('depo'))
+                
+            parcalar = hedef_uretim_val.split('|')
+            islem_tarihi = parcalar[0].strip()
+            ogun_secimi = parcalar[1].strip()
+            hedef_yemek = parcalar[2].strip()
+            
+            # Seçilen yemeğin reçetesini al
+            recete = conn.execute("SELECT * FROM receteler WHERE yemek_adi=?", (hedef_yemek,)).fetchall()
+            
+            if not recete:
+                flash(f"Hata: '{hedef_yemek}' için kayıtlı bir reçete (malzeme listesi) bulunamadı!", "error")
+                return redirect(url_for('depo'))
+
+            yetersiz_stoklar = []
+            basarili_cikislar = []
+
+            for r in recete:
+                d_m = conn.execute("SELECT id, miktar, birim FROM depo WHERE urun_adi COLLATE NOCASE = ?", (r['malzeme_adi'],)).fetchone()
+                
+                # GR hesabı KG'ye dönüştürülüyor
+                oran = 1000 if d_m and d_m['birim'].upper() in ['KG', 'LT'] else 1
+                gereken = (r['miktar'] * porsiyon) / oran
+                
+                if d_m and d_m['miktar'] >= gereken:
+                    # Depodan düş
+                    conn.execute("UPDATE depo SET miktar = miktar - ? WHERE id=?", (gereken, d_m['id']))
+                    
+                    # FIFO (İlk giren ilk çıkar) mantığıyla marka stoklarından düş
+                    lots = conn.execute("SELECT id, kalan_miktar, marka FROM stok_lotlari WHERE urun_adi COLLATE NOCASE=? AND kalan_miktar > 0 ORDER BY tarih ASC", (r['malzeme_adi'],)).fetchall()
+                    kalan_dusulecek = gereken
+                    kullanilan_marka = "Karışık Lot" if len(lots) > 1 else (lots[0]['marka'] if lots else 'Sistem/Eski Stok')
+                    
+                    for lot in lots:
+                        if kalan_dusulecek <= 0: break
+                        if lot['kalan_miktar'] <= kalan_dusulecek:
+                            kalan_dusulecek -= lot['kalan_miktar']
+                            conn.execute("UPDATE stok_lotlari SET kalan_miktar=0 WHERE id=?", (lot['id'],))
+                        else:
+                            conn.execute("UPDATE stok_lotlari SET kalan_miktar=kalan_miktar-? WHERE id=?", (kalan_dusulecek, lot['id']))
+                            kalan_dusulecek = 0
+                            
+                    # Depo çıkış logunu yaz
+                    onay = "Onaylandı" if session.get('rol') == 'admin' else "Bekliyor"
+                    aciklama = f"Toplu Reçete Çıkışı ({porsiyon} Porsiyon) | İşlem: {session['isim']}"
+                    conn.execute("INSERT INTO depo_cikis (tarih, ogun, yemek_adi, malzeme_adi, marka, miktar, birim, onay_durumu, aciklama) VALUES (?,?,?,?,?,?,?,'Onaylandı',?)",
+                                 (islem_tarihi, ogun_secimi, hedef_yemek, r['malzeme_adi'], kullanilan_marka, gereken, d_m['birim'], aciklama))
+                    
+                    basarili_cikislar.append(f"{r['malzeme_adi']} ({gereken} {d_m['birim']})")
+                else:
+                    mevcut_miktar = d_m['miktar'] if d_m else 0
+                    birim_str = d_m['birim'] if d_m else 'Birim'
+                    yetersiz_stoklar.append(f"{r['malzeme_adi']} (Gereken: {gereken} {birim_str}, Mevcut: {mevcut_miktar} {birim_str})")
+
+            conn.commit()
+            
+            if yetersiz_stoklar:
+                flash(f"Kısmi Çıkış Yapıldı! Şu ürünlerin stoğu yetersiz olduğu için çıkılamadı: {', '.join(yetersiz_stoklar)}", "error")
+            elif basarili_cikislar:
+                flash(f"✅ '{hedef_yemek}' ({porsiyon} Kişi) için tüm reçete malzemeleri depodan mutfağa sevk edildi!", "success")
+                
+        # --- MEVCUT ONAY/RED İŞLEMLERİ ---
         elif islem == 'cikis_onayla' and session.get('rol') == 'admin':
             cikis = conn.execute("SELECT * FROM depo_cikis WHERE id=?", (request.form['cikis_id'],)).fetchone()
             if cikis and cikis['onay_durumu'] == 'Bekliyor':
@@ -699,7 +768,10 @@ def depo():
 
     bekleyen_cikislar = conn.execute("SELECT * FROM depo_cikis WHERE onay_durumu='Bekliyor' ORDER BY id DESC").fetchall()
     cikislar = conn.execute("SELECT * FROM depo_cikis WHERE onay_durumu='Onaylandı' ORDER BY id DESC LIMIT 30").fetchall()
+    
+    # 👑 BURASI DA ÇOK ÖNEMLİ (Toplu çıkış formu bu veriyi kullanıyor)
     planlananlar = conn.execute("SELECT tarih, ogun, yemek_adi FROM uretim WHERE durum IN ('Planlandı', 'Üretimde') AND tarih >= ? ORDER BY tarih ASC", (bugun,)).fetchall()
+    
     kategoriler = []
     for s in stoklar:
         kat = s['kategori']
@@ -708,7 +780,6 @@ def depo():
 
     conn.close()
     return render_template('depo.html', stoklar=stoklar, detayli_stoklar=detayli_stoklar, cikislar=cikislar, bekleyen_cikislar=bekleyen_cikislar, bugun=bugun, kategoriler=kategoriler, planlananlar=planlananlar)
-
 # ==========================================
 # ÜRETİM VE HAFIZALI MENÜ PLANLAMA MOTORU
 # ==========================================
@@ -1597,11 +1668,11 @@ def raporlar():
     fire_detay_verisi = conn.execute("SELECT urun_adi, kategori, miktar, birim, tarih, kullanici, aciklama FROM fire_kayitlari ORDER BY tarih DESC LIMIT 100").fetchall()
 
     # ==========================================
-    # YENİ: İK (AYLIK KONSOLİDE VUKUAT) ANALİZİ
+    # İK (AYLIK KONSOLİDE VUKUAT VE İZİN) ANALİZİ
     # ==========================================
     bugun = date.today()
     mevcut_ay = bugun.strftime('%Y-%m')
-    secilen_ay = request.args.get('ik_ay', mevcut_ay) # URL'den 'ik_ay' parametresini alır (Örn: 2026-05)
+    secilen_ay = request.args.get('ik_ay', mevcut_ay)
 
     # 1. PDKS Loglarından Geç Gelme ve Gelmeme Toplamları
     vukuatlar_raw = conn.execute('''
@@ -1620,13 +1691,23 @@ def raporlar():
         WHERE i.izin_turu = 'Hastalık Raporu' AND i.baslangic_tarihi LIKE ?
     ''', (f"{secilen_ay}%",)).fetchall()
 
+    # 3. YENİ: Saatlik İzinleri Çek
+    saatlik_izinler_raw = conn.execute('''
+        SELECT p.id, p.ad_soyad, COUNT(i.id) as adet
+        FROM personel_izinler i
+        JOIN personeller p ON i.personel_id = p.id
+        WHERE i.izin_turu = 'Saatlik İzin' AND i.baslangic_tarihi LIKE ?
+        GROUP BY p.id, p.ad_soyad
+    ''', (f"{secilen_ay}%",)).fetchall()
+
     ik_ozet = {}
 
     # Vukuatları sözlüğe (Kişi Kartına) işle
     for v in vukuatlar_raw:
         pid = v['id']
         if pid not in ik_ozet:
-            ik_ozet[pid] = {'ad_soyad': v['ad_soyad'], 'gec_gelme': 0, 'gelmeme': 0, 'rapor_sayisi': 0, 'rapor_gun': 0}
+            # YENİ: 'saatlik_izin': 0 eklendi
+            ik_ozet[pid] = {'ad_soyad': v['ad_soyad'], 'gec_gelme': 0, 'gelmeme': 0, 'rapor_sayisi': 0, 'rapor_gun': 0, 'saatlik_izin': 0}
         
         if v['durum'] == 'Geç Geldi':
             ik_ozet[pid]['gec_gelme'] += v['adet']
@@ -1638,7 +1719,8 @@ def raporlar():
     for r in raporlar_raw:
         pid = r['id']
         if pid not in ik_ozet:
-            ik_ozet[pid] = {'ad_soyad': r['ad_soyad'], 'gec_gelme': 0, 'gelmeme': 0, 'rapor_sayisi': 0, 'rapor_gun': 0}
+            # YENİ: 'saatlik_izin': 0 eklendi
+            ik_ozet[pid] = {'ad_soyad': r['ad_soyad'], 'gec_gelme': 0, 'gelmeme': 0, 'rapor_sayisi': 0, 'rapor_gun': 0, 'saatlik_izin': 0}
         
         try:
             b = datetime.strptime(r['baslangic_tarihi'], '%Y-%m-%d')
@@ -1650,6 +1732,14 @@ def raporlar():
             
         ik_ozet[pid]['rapor_sayisi'] += 1
         ik_ozet[pid]['rapor_gun'] += gun
+
+    # YENİ: Saatlik İzinleri sözlüğe işle
+    for s in saatlik_izinler_raw:
+        pid = s['id']
+        if pid not in ik_ozet:
+            ik_ozet[pid] = {'ad_soyad': s['ad_soyad'], 'gec_gelme': 0, 'gelmeme': 0, 'rapor_sayisi': 0, 'rapor_gun': 0, 'saatlik_izin': 0}
+        
+        ik_ozet[pid]['saatlik_izin'] += s['adet']
 
     # Kişi listesini isme göre alfabetik sırala
     ik_ozet_listesi = sorted(ik_ozet.values(), key=lambda x: x['ad_soyad'])
@@ -1829,8 +1919,12 @@ def personel():
     bugun_izinliler_db = conn.execute("SELECT personel_id FROM personel_izinler WHERE baslangic_tarihi <= ? AND bitis_tarihi >= ?", (bugun, bugun)).fetchall()
     izinli_idler = [i['personel_id'] for i in bugun_izinliler_db]
 
-    secilen_tarih_izinliler = conn.execute("SELECT personel_id FROM personel_izinler WHERE baslangic_tarihi <= ? AND bitis_tarihi >= ?", (secilen_tarih, secilen_tarih)).fetchall()
+    # Seçilen günün izinlilerini türleriyle birlikte çekiyoruz
+    secilen_tarih_izinliler = conn.execute("SELECT personel_id, izin_turu FROM personel_izinler WHERE baslangic_tarihi <= ? AND bitis_tarihi >= ?", (secilen_tarih, secilen_tarih)).fetchall()
     secilen_izinli_idler = [i['personel_id'] for i in secilen_tarih_izinliler]
+    
+    # 👑 YENİ: Hangi personelin ne tür izinde olduğunu HTML'e söyleyen güvenli sözlük
+    secilen_izinler_dict = {i['personel_id']: i['izin_turu'] for i in secilen_tarih_izinliler}
     
     for p in personeller_raw:
         p_dict = dict(p)
@@ -1879,7 +1973,7 @@ def personel():
     ihtarlar = [dict(row) for row in ihtarlar_raw]
 
     conn.close()
-    return render_template('personel.html', personeller=personeller, bugunku_izinler_detay=bugunku_izinler_detay, tum_izinler=tum_izinler, izinli_idler=izinli_idler, secilen_izinli_idler=secilen_izinli_idler, yoklama_dict=yoklama_dict, bugun=bugun, secilen_tarih=secilen_tarih, gec_kalan_sayisi=gec_kalan_sayisi, gelmeyen_sayisi=gelmeyen_sayisi, ihtarlar=ihtarlar)
+    return render_template('personel.html', personeller=personeller, bugunku_izinler_detay=bugunku_izinler_detay, tum_izinler=tum_izinler, izinli_idler=izinli_idler, secilen_izinli_idler=secilen_izinli_idler, yoklama_dict=yoklama_dict, bugun=bugun, secilen_tarih=secilen_tarih, gec_kalan_sayisi=gec_kalan_sayisi, gelmeyen_sayisi=gelmeyen_sayisi, ihtarlar=ihtarlar, secilen_izinler_dict=secilen_izinler_dict)
 
 @app.route('/api/urun-gecmisi/<int:urun_id>')
 @login_required

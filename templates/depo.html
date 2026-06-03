@@ -37,215 +37,229 @@
           {% endif %}
         {% endwith %}
 
-        <div class="space-y-10 mb-10 w-full max-w-6xl mx-auto">
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-10 w-full max-w-7xl mx-auto">
             
-            <div class="bg-white p-8 rounded-[2rem] shadow-sm border border-indigo-100 border-l-8 border-l-indigo-500 relative z-40">
-                <h3 class="text-xl font-black text-gray-800 mb-4 flex items-center gap-2">📤 {% if session.rol == 'admin' %}Hızlı Mal Çıkışı Yap{% else %}Mal Çıkış Talebi Oluştur{% endif %}</h3>
+            <div class="bg-white p-8 rounded-[2rem] shadow-sm border border-emerald-100 border-l-8 border-l-emerald-500 relative z-30">
+                <h3 class="text-lg font-black text-gray-800 mb-2 flex items-center gap-2">🍲 Reçeteye Göre Toplu Çıkış</h3>
+                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-6 border-b border-gray-100 pb-4">Seçilen yemeğin reçetesini okur ve tüm malzemeleri tek seferde depodan düşer.</p>
                 
-                <div class="bg-emerald-50 border border-emerald-200 p-3 rounded-xl mb-6 text-emerald-700 text-[11px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm">
-                    <span class="text-lg">👩‍🍳</span> Buradan çıkışı yapılan ürünler doğrudan "Üretim Paneli"ndeki Anlık Mutfak Deposuna aktarılır.
-                </div>
+                <form action="/depo" method="POST" class="space-y-4" onsubmit="return confirm('Seçilen yemeğin TÜM reçete malzemeleri depodan düşülecek. Onaylıyor musunuz?');">
+                    <input type="hidden" name="islem_tipi" value="toplu_recete_cikisi">
+                    
+                    <div>
+                        <label class="block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2 flex items-center gap-2">
+                            <span>🎯</span> Hangi Yemek Yapılacak?
+                        </label>
+                        <select name="toplu_uretim" required class="w-full border-2 border-emerald-100 p-4 rounded-xl font-black outline-none bg-emerald-50/50 focus:border-emerald-500 text-sm text-emerald-900 shadow-inner transition cursor-pointer">
+                            <option value="">Planlanmış Menüden Bir Yemek Seçin...</option>
+                            {% for u in planlananlar %}
+                                <option value="{{ u.tarih }}|{{ u.ogun }}|{{ u.yemek_adi }}">📅 [{{ u.tarih[-5:] }}] {{ u.ogun[:4] }}. - {{ u.yemek_adi }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
 
+                    <div>
+                        <label class="block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">Kaç Kişilik (Porsiyon) Hazırlanacak?</label>
+                        <input type="number" name="porsiyon" required placeholder="Örn: 1000" class="w-full border-2 border-emerald-100 p-4 rounded-xl font-black outline-none bg-emerald-50/50 focus:border-emerald-500 text-lg text-emerald-900 shadow-inner text-center transition">
+                    </div>
+
+                    <button type="submit" class="w-full bg-emerald-600 text-white font-black py-4 rounded-xl hover:bg-emerald-700 transition shadow-sm text-xs uppercase tracking-widest mt-2">
+                        {% if session.rol == 'admin' %} Reçetedeki Tüm Ürünleri Çıkar {% else %} Reçete Çıkış Talebi Gönder {% endif %}
+                    </button>
+                </form>
+            </div>
+
+            <div class="bg-white p-8 rounded-[2rem] shadow-sm border border-indigo-100 border-l-8 border-l-indigo-500 relative z-40">
+                <h3 class="text-lg font-black text-gray-800 mb-2 flex items-center gap-2">📤 Tekil / Manuel Mal Çıkışı</h3>
+                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-6 border-b border-gray-100 pb-4">Reçete harici özel eklemeler, temizlik ve ikram çıkışları içindir.</p>
+                
                 <form action="/depo" method="POST" class="space-y-4" onsubmit="return validateCikisForm(this);">
                     <input type="hidden" name="islem_tipi" value="depo_cikis">
                     
-                    <div class="mb-4 bg-indigo-50/40 p-5 rounded-2xl border border-indigo-100">
-                        <label class="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-2 flex items-center gap-2">
-                            <span>🎯</span> Hedef Üretim / Kullanım Yeri (Zorunlu)
-                        </label>
-                        <select name="bagli_uretim" required class="w-full border-2 border-indigo-100 p-4 rounded-xl font-black outline-none bg-white focus:border-indigo-500 text-sm text-indigo-900 shadow-inner transition cursor-pointer">
-                            <option value="">Bu malzeme hangi yemek/işlem için çıkıyor?</option>
-                            <optgroup label="📋 Planlı Üretimler (Menüye Eklenenler)"></optgroup>
-                                {% for u in planlananlar %}
-                                <option value="{{ u.tarih }}|{{ u.ogun }}|{{ u.yemek_adi }}">📅 [{{ u.tarih }}] {{ u.ogun }} - {{ u.yemek_adi }}</option>
-                                {% endfor %}
-                            </optgroup>
-                            <optgroup label="⚠️ Bağımsız / İstisnai Çıkışlar">
-                                <option value="{{ bugun }}|Zayi/Fire|Çöpe Giden (Zayi)">🗑️ Zayi / Fire (Bozulan/Dökülen/Patlayan)</option>
-                                <option value="{{ bugun }}|Personel İkram|Ağırlama">☕ Personel / Misafir İkramı</option>
-                                <option value="{{ bugun }}|Genel Tüketim|Temizlik/Sarf">🧹 Temizlik ve Sarf Malzemesi</option>
-                            </optgroup>
-                        </select>
-                        <p class="text-xs font-bold text-indigo-400 mt-2 ml-1">Lütfen planlanmış bir yemeği seçin. Plan dışı işlemse istisnaları kullanın.</p>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        
-                        <div class="md:col-span-2 relative" id="customSelectContainer">
-                            <label class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 flex justify-between">
-                                <span>Çıkış Yapılacak Ürün ve Marka</span>
-                                <span class="text-red-400">*Listeden Seçilmeli</span>
-                            </label>
-                            
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="relative" id="customSelectContainer">
+                            <label class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Ürün / Malzeme Ara</label>
                             <input type="hidden" name="urun_adi_marka" id="hiddenUrunMarka" required>
                             
                             <div class="relative">
                                 <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">🔍</span>
-                                <input type="text" id="searchUrunInput" placeholder="Ürün ara ve listeden seç... (Örn: Pirinç)" class="w-full border-2 border-gray-100 pl-10 pr-4 py-4 rounded-xl font-black outline-none bg-gray-50 focus:border-indigo-500 text-sm text-indigo-900 transition" autocomplete="off" oninput="filterCustomSelect()" onclick="openCustomSelect()">
+                                <input type="text" id="searchUrunInput" placeholder="Arayıp seç..." class="w-full border-2 border-gray-100 pl-10 pr-2 py-3.5 rounded-xl font-black outline-none bg-gray-50 focus:border-indigo-500 text-xs text-indigo-900 transition" autocomplete="off" oninput="filterCustomSelect()" onclick="openCustomSelect()">
                             </div>
                             
                             <div id="customSelectList" class="hidden absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-2xl shadow-2xl max-h-[300px] overflow-y-auto custom-scrollbar">
                                 {% for s in detayli_stoklar %}
-                                <div class="custom-select-item p-4 hover:bg-indigo-50 cursor-pointer border-b border-gray-50 transition-colors" data-value="{{ s.urun_adi }}|{{ s.gercek_marka }}" onclick="selectCustomItem(this, '{{ s.urun_adi }}{% if s.marka %} - {{ s.marka }}{% endif %} (Stok: {{ s.miktar|int if s.miktar % 1 == 0 else s.miktar|round(2) }} {{ s.birim }})')">
+                                <div class="custom-select-item p-4 hover:bg-indigo-50 cursor-pointer border-b border-gray-50 transition-colors" data-value="{{ s.urun_adi }}|{{ s.gercek_marka }}" onclick="selectCustomItem(this, '{{ s.urun_adi }} (Stok: {{ s.miktar|int if s.miktar % 1 == 0 else s.miktar|round(2) }} {{ s.birim }})')">
                                     <span class="font-black text-gray-800 block text-sm">{{ s.urun_adi }}</span>
                                     <span class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1 block">
-                                        {% if s.marka %}<span class="text-indigo-500">Marka: {{ s.marka }}</span> | {% endif %}Mevcut Stok: <b class="text-indigo-600">{{ s.miktar|int if s.miktar % 1 == 0 else s.miktar|round(2) }} {{ s.birim }}</b>
+                                        {% if s.marka %}<span class="text-indigo-500">Marka: {{ s.marka }}</span> | {% endif %}Stok: <b class="text-indigo-600">{{ s.miktar|int if s.miktar % 1 == 0 else s.miktar|round(2) }} {{ s.birim }}</b>
                                     </span>
                                 </div>
                                 {% endfor %}
-                                <div id="customSelectNoResult" class="hidden p-6 text-center text-xs font-bold text-red-500 uppercase tracking-widest bg-red-50">Aradığınız kriterde veya markada ürün bulunamadı.</div>
+                                <div id="customSelectNoResult" class="hidden p-6 text-center text-xs font-bold text-red-500 uppercase tracking-widest bg-red-50">Ürün bulunamadı.</div>
                             </div>
                         </div>
 
                         <div>
                             <label class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Miktar</label>
-                            <input type="number" step="0.01" name="miktar" required placeholder="0.00" class="w-full border-2 border-gray-100 p-4 rounded-xl font-black outline-none bg-gray-50 text-indigo-700 text-center text-lg">
+                            <input type="number" step="0.01" name="miktar" required placeholder="0.00" class="w-full border-2 border-gray-100 p-3.5 rounded-xl font-black outline-none bg-gray-50 text-indigo-700 text-center text-base">
                         </div>
                     </div>
 
                     <div>
-                        <label class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Ekstra Açıklama / Not</label>
-                        <input type="text" name="aciklama" placeholder="Gerekliyse ek not yazın..." class="w-full border-2 border-gray-100 p-4 rounded-xl font-bold outline-none bg-gray-50 text-sm">
+                        <label class="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1">Hedef Üretim (Kullanım Yeri)</label>
+                        <select name="bagli_uretim" required class="w-full border-2 border-indigo-100 p-3.5 rounded-xl font-black outline-none bg-indigo-50/50 focus:border-indigo-500 text-xs text-indigo-900 shadow-inner transition cursor-pointer">
+                            <option value="">İşlem Nedeni Seçin...</option>
+                            <optgroup label="📋 Planlı Üretimler"></optgroup>
+                                {% for u in planlananlar %}
+                                <option value="{{ u.tarih }}|{{ u.ogun }}|{{ u.yemek_adi }}">📅 [{{ u.tarih[-5:] }}] {{ u.ogun[:4] }}. - {{ u.yemek_adi }}</option>
+                                {% endfor %}
+                            </optgroup>
+                            <optgroup label="⚠️ Bağımsız / İstisnai Çıkışlar">
+                                <option value="{{ bugun }}|Zayi/Fire|Çöpe Giden (Zayi)">🗑️ Zayi / Fire</option>
+                                <option value="{{ bugun }}|Personel İkram|Ağırlama">☕ İkram / Ağırlama</option>
+                                <option value="{{ bugun }}|Genel Tüketim|Temizlik/Sarf">🧹 Temizlik / Sarf</option>
+                            </optgroup>
+                        </select>
                     </div>
 
-                    <button type="submit" class="w-full bg-indigo-600 text-white font-black py-4 rounded-xl hover:bg-indigo-700 transition shadow-sm text-sm uppercase tracking-widest mt-4">
-                        {% if session.rol == 'admin' %} Stoktan Çıkışı Onayla {% else %} Talebi İlet (Onaya Gönder) {% endif %}
+                    <button type="submit" class="w-full bg-slate-800 text-white font-black py-4 rounded-xl hover:bg-slate-900 transition shadow-sm text-xs uppercase tracking-widest mt-2">
+                        Tekil Malzeme Çıkışı Yap
                     </button>
                 </form>
             </div>
-
-            {% if bekleyen_cikislar|length > 0 %}
-            <div class="bg-gray-900 rounded-[2rem] shadow-xl border-t-8 border-orange-500 overflow-hidden w-full">
-                <div class="p-6 border-b border-gray-800 flex justify-between items-center">
-                    <h3 class="text-xl font-black text-white flex items-center gap-2">⏳ Onay Bekleyen Mal Çıkış Talepleri</h3>
-                    <span class="bg-orange-500 text-white px-3 py-1 rounded-full text-xs font-black">{{ bekleyen_cikislar|length }} Talep</span>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left whitespace-nowrap text-sm">
-                        <thead class="bg-gray-800 text-gray-400 uppercase text-[10px] tracking-widest">
-                            <tr><th class="p-4">Kullanım Yeri</th><th class="p-4">İstenen Ürün</th><th class="p-4 text-center">Miktar</th><th class="p-4 text-right">Aksiyon / Durum</th></tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-800">
-                            {% for b in bekleyen_cikislar %}
-                            <tr class="hover:bg-gray-800 transition">
-                                <td class="p-4">
-                                    <span class="font-bold text-gray-300 block text-sm">{{ b.yemek_adi }}</span>
-                                    <span class="text-[10px] font-black text-orange-400 uppercase tracking-widest">{{ b.tarih }} | {{ b.ogun }}</span>
-                                </td>
-                                <td class="p-4">
-                                    <span class="font-black text-white text-base">{{ b.malzeme_adi }}</span>
-                                    {% if b.marka %}<span class="block text-[10px] text-gray-400 uppercase tracking-widest">{{ b.marka }}</span>{% endif %}
-                                </td>
-                                <td class="p-4 text-center font-black text-orange-400 text-lg">{{ b.miktar|int if b.miktar % 1 == 0 else b.miktar|round(2) }} {{ b.birim }}</td>
-                                <td class="p-4 text-right">
-                                    {% if session.rol == 'admin' %}
-                                        <div class="flex justify-end gap-2">
-                                            <form action="/depo" method="POST" class="m-0">
-                                                <input type="hidden" name="islem_tipi" value="cikis_onayla"><input type="hidden" name="cikis_id" value="{{ b.id }}">
-                                                <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black px-4 py-2 rounded-xl text-xs uppercase tracking-widest shadow-sm">Onayla (Düş)</button>
-                                            </form>
-                                            <form action="/depo" method="POST" class="m-0" onsubmit="return confirm('Bu talebi reddetmek istediğinize emin misiniz?');">
-                                                <input type="hidden" name="islem_tipi" value="cikis_reddet"><input type="hidden" name="cikis_id" value="{{ b.id }}">
-                                                <button type="submit" class="bg-red-900/50 hover:bg-red-600 text-red-400 hover:text-white font-black px-4 py-2 rounded-xl text-xs uppercase tracking-widest border border-red-800 transition">Reddet</button>
-                                            </form>
-                                        </div>
-                                    {% else %}
-                                        <span class="bg-orange-900/50 text-orange-400 font-bold px-3 py-2 rounded-xl text-[10px] uppercase tracking-widest border border-orange-800">Yönetici Onayı Bekliyor</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            {% endif %}
-
-            <div class="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden w-full flex flex-col z-10">
-                <div class="p-8 border-b border-gray-100 bg-gray-50/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                    <div>
-                        <h3 class="font-black text-gray-800 tracking-tight text-xl mb-1">🗄️ Güncel Depo Stokları</h3>
-                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Arama ve Kategori Filtresi</p>
-                    </div>
-
-                    <div class="flex flex-col md:flex-row gap-3 w-full md:w-auto">
-                        <div class="relative w-full md:w-64">
-                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">🔍</span>
-                            <input type="text" id="depoGenelAramaInput" placeholder="Stoklarda ürün ara..." class="w-full border border-gray-300 pl-10 pr-3 py-2.5 rounded-xl text-sm font-bold bg-white outline-none focus:border-indigo-500 text-gray-800 transition shadow-sm" onkeyup="filterStoklar()">
-                        </div>
-                        
-                        <div class="w-full md:w-48">
-                            <select id="kategoriSelect" onchange="filterStoklar()" class="w-full border border-gray-300 p-2.5 rounded-xl text-sm font-black text-gray-700 bg-white outline-none focus:border-indigo-500 transition shadow-sm cursor-pointer">
-                                <option value="Tümü">Tüm Kategoriler</option>
-                                {% for cat in kategoriler %}
-                                    <option value="{{ cat }}">{{ cat }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="overflow-x-auto w-full max-h-[600px] custom-scrollbar bg-white">
-                    <table class="w-full text-left text-sm whitespace-nowrap depo-tablosu">
-                        <thead class="text-gray-400 uppercase text-[10px] tracking-widest border-b border-gray-100 bg-white sticky top-0 z-10">
-                            <tr>
-                                <th class="p-6">Ürün Kategorisi & Adı</th>
-                                <th class="p-6 w-48">Stok Durumu / Miktar</th>
-                                {% if session.rol == 'admin' %}<th class="p-6 text-right">Sayım & Ayarlar</th>{% endif %}
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-50" id="stokTableBody">
-                            {% for s in stoklar %}
-                            
-                            {% set filtre_kat = "🥩 Kırmızı Et" if "Kırmızı Et" in s.kategori else s.kategori %}
-                            
-                            <tr class="stok-row transition-all duration-300 {% if 'Karkas' in s.urun_adi %} bg-rose-50/50 border border-rose-100 shadow-sm {% else %} hover:bg-indigo-50/30 {% endif %}" data-category="{{ filtre_kat }}">
-                                <td class="p-6">
-                                    <span class="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-1">{{ s.kategori }}</span>
-                                    <span class="font-black text-gray-800 {% if 'Karkas' in s.urun_adi %} text-2xl tracking-tighter {% else %} text-lg {% endif %}">
-                                        {{ s.urun_adi }}
-                                        {% if 'Karkas' in s.urun_adi %} <span class="ml-2 text-[10px] bg-rose-600 text-white px-2 py-1 rounded-full uppercase tracking-tighter align-middle">Ana Stok</span> {% endif %}
-                                    </span>
-                                </td>
-                                <td class="p-6">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <span class="font-black {% if s.miktar <= 0 %}text-red-500{% elif s.miktar < 10 %}text-orange-500{% else %}text-emerald-600{% endif %} {% if 'Karkas' in s.urun_adi %} text-3xl {% else %} text-xl {% endif %}">
-                                            {{ s.miktar|int if s.miktar % 1 == 0 else s.miktar|round(2) }} <small class="text-xs">{{ s.birim }}</small>
-                                        </span>
-                                        <span class="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md {% if s.miktar <= 0 %}bg-red-100 text-red-600{% elif s.miktar < 10 %}bg-orange-100 text-orange-600{% else %}bg-emerald-100 text-emerald-600{% endif %}">
-                                            {% if s.miktar <= 0 %}Tükendi{% elif s.miktar < 10 %}Kritik{% else %}Yeterli{% endif %}
-                                        </span>
-                                    </div>
-                                    {% set pct = (s.miktar / 50 * 100)|round %}
-                                    {% if pct > 100 %}{% set pct = 100 %}{% endif %}
-                                    <div class="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                                        <div class="h-full rounded-full transition-all duration-1000 {% if s.miktar <= 0 %}bg-red-500{% elif s.miktar < 10 %}bg-orange-500{% else %}bg-emerald-500{% endif %}" style="width: {{ pct }}%"></div>
-                                    </div>
-                                </td>
-                                {% if session.rol == 'admin' %}
-                                <td class="p-6 text-right align-middle">
-                                    <div class="flex justify-end items-center gap-3">
-                                        <form action="/depo" method="POST" class="m-0 flex items-center gap-2" onsubmit="return confirm('Stok miktarını değiştirmek üzeresiniz. Emin misiniz?');">
-                                            <input type="hidden" name="islem_tipi" value="manuel_sayim"><input type="hidden" name="urun_id" value="{{ s.id }}">
-                                            <input type="number" step="0.01" name="yeni_miktar" value="{{ s.miktar }}" required class="w-20 border-2 border-gray-100 p-2 rounded-xl font-black text-center outline-none bg-white focus:border-indigo-400 transition text-sm">
-                                            <button type="submit" class="bg-white border border-gray-200 hover:bg-indigo-600 hover:text-white text-gray-600 font-black px-3 py-2 rounded-xl text-[10px] uppercase tracking-widest transition-all shadow-sm" title="Kaydet">✓</button>
-                                        </form>
-                                        <button onclick="openAyarModal({{ s.id }}, '{{ s.urun_adi }}')" class="w-10 h-10 flex items-center justify-center bg-white hover:bg-gray-800 hover:text-white text-gray-500 rounded-xl transition-colors border border-gray-200 shadow-sm" title="Ayarlar & Geçmiş">
-                                            ⚙️
-                                        </button>
-                                    </div>
-                                </td>
-                                {% endif %}
-                            </tr>
-                            {% else %}
-                            <tr><td colspan="3" class="p-16 text-center font-bold text-gray-400">Depoda hiç ürün bulunmuyor.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
         </div>
+
+        {% if bekleyen_cikislar|length > 0 %}
+        <div class="bg-gray-900 rounded-[2rem] shadow-xl border-t-8 border-orange-500 overflow-hidden w-full mb-10 max-w-7xl mx-auto">
+            <div class="p-6 border-b border-gray-800 flex justify-between items-center">
+                <h3 class="text-xl font-black text-white flex items-center gap-2">⏳ Onay Bekleyen Mal Çıkış Talepleri</h3>
+                <span class="bg-orange-500 text-white px-3 py-1 rounded-full text-xs font-black">{{ bekleyen_cikislar|length }} Talep</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left whitespace-nowrap text-sm">
+                    <thead class="bg-gray-800 text-gray-400 uppercase text-[10px] tracking-widest">
+                        <tr><th class="p-4">Kullanım Yeri</th><th class="p-4">İstenen Ürün</th><th class="p-4 text-center">Miktar</th><th class="p-4 text-right">Aksiyon / Durum</th></tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-800">
+                        {% for b in bekleyen_cikislar %}
+                        <tr class="hover:bg-gray-800 transition">
+                            <td class="p-4">
+                                <span class="font-bold text-gray-300 block text-sm">{{ b.yemek_adi }}</span>
+                                <span class="text-[10px] font-black text-orange-400 uppercase tracking-widest">{{ b.tarih }} | {{ b.ogun }}</span>
+                            </td>
+                            <td class="p-4">
+                                <span class="font-black text-white text-base">{{ b.malzeme_adi }}</span>
+                                {% if b.marka %}<span class="block text-[10px] text-gray-400 uppercase tracking-widest">{{ b.marka }}</span>{% endif %}
+                            </td>
+                            <td class="p-4 text-center font-black text-orange-400 text-lg">{{ b.miktar|int if b.miktar % 1 == 0 else b.miktar|round(2) }} {{ b.birim }}</td>
+                            <td class="p-4 text-right">
+                                {% if session.rol == 'admin' %}
+                                    <div class="flex justify-end gap-2">
+                                        <form action="/depo" method="POST" class="m-0">
+                                            <input type="hidden" name="islem_tipi" value="cikis_onayla"><input type="hidden" name="cikis_id" value="{{ b.id }}">
+                                            <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black px-4 py-2 rounded-xl text-xs uppercase tracking-widest shadow-sm">Onayla</button>
+                                        </form>
+                                        <form action="/depo" method="POST" class="m-0" onsubmit="return confirm('Bu talebi reddetmek istediğinize emin misiniz?');">
+                                            <input type="hidden" name="islem_tipi" value="cikis_reddet"><input type="hidden" name="cikis_id" value="{{ b.id }}">
+                                            <button type="submit" class="bg-red-900/50 hover:bg-red-600 text-red-400 hover:text-white font-black px-4 py-2 rounded-xl text-xs uppercase tracking-widest border border-red-800 transition">Reddet</button>
+                                        </form>
+                                    </div>
+                                {% else %}
+                                    <span class="bg-orange-900/50 text-orange-400 font-bold px-3 py-2 rounded-xl text-[10px] uppercase tracking-widest border border-orange-800">Yönetici Onayı Bekliyor</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden w-full flex flex-col z-10 max-w-7xl mx-auto">
+            <div class="p-8 border-b border-gray-100 bg-gray-50/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div>
+                    <h3 class="font-black text-gray-800 tracking-tight text-xl mb-1">🗄️ Güncel Depo Stokları</h3>
+                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Arama ve Kategori Filtresi</p>
+                </div>
+
+                <div class="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+                    <div class="relative w-full md:w-64">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">🔍</span>
+                        <input type="text" id="depoGenelAramaInput" placeholder="Stoklarda ürün ara..." class="w-full border border-gray-300 pl-10 pr-3 py-2.5 rounded-xl text-sm font-bold bg-white outline-none focus:border-indigo-500 text-gray-800 transition shadow-sm" onkeyup="filterStoklar()">
+                    </div>
+                    
+                    <div class="w-full md:w-48">
+                        <select id="kategoriSelect" onchange="filterStoklar()" class="w-full border border-gray-300 p-2.5 rounded-xl text-sm font-black text-gray-700 bg-white outline-none focus:border-indigo-500 transition shadow-sm cursor-pointer">
+                            <option value="Tümü">Tüm Kategoriler</option>
+                            {% for cat in kategoriler %}
+                                <option value="{{ cat }}">{{ cat }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto w-full max-h-[600px] custom-scrollbar bg-white">
+                <table class="w-full text-left text-sm whitespace-nowrap depo-tablosu">
+                    <thead class="text-gray-400 uppercase text-[10px] tracking-widest border-b border-gray-100 bg-white sticky top-0 z-10">
+                        <tr>
+                            <th class="p-6">Ürün Kategorisi & Adı</th>
+                            <th class="p-6 w-48">Stok Durumu / Miktar</th>
+                            {% if session.rol == 'admin' %}<th class="p-6 text-right">Sayım & Ayarlar</th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-50" id="stokTableBody">
+                        {% for s in stoklar %}
+                        
+                        {% set filtre_kat = "🥩 Kırmızı Et" if "Kırmızı Et" in s.kategori else s.kategori %}
+                        
+                        <tr class="stok-row transition-all duration-300 {% if 'Karkas' in s.urun_adi %} bg-rose-50/50 border border-rose-100 shadow-sm {% else %} hover:bg-indigo-50/30 {% endif %}" data-category="{{ filtre_kat }}">
+                            <td class="p-6">
+                                <span class="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-1">{{ s.kategori }}</span>
+                                <span class="font-black text-gray-800 {% if 'Karkas' in s.urun_adi %} text-2xl tracking-tighter {% else %} text-lg {% endif %}">
+                                    {{ s.urun_adi }}
+                                    {% if 'Karkas' in s.urun_adi %} <span class="ml-2 text-[10px] bg-rose-600 text-white px-2 py-1 rounded-full uppercase tracking-tighter align-middle">Ana Stok</span> {% endif %}
+                                </span>
+                            </td>
+                            <td class="p-6">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="font-black {% if s.miktar <= 0 %}text-red-500{% elif s.miktar < 10 %}text-orange-500{% else %}text-emerald-600{% endif %} {% if 'Karkas' in s.urun_adi %} text-3xl {% else %} text-xl {% endif %}">
+                                        {{ s.miktar|int if s.miktar % 1 == 0 else s.miktar|round(2) }} <small class="text-xs">{{ s.birim }}</small>
+                                    </span>
+                                    <span class="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md {% if s.miktar <= 0 %}bg-red-100 text-red-600{% elif s.miktar < 10 %}bg-orange-100 text-orange-600{% else %}bg-emerald-100 text-emerald-600{% endif %}">
+                                        {% if s.miktar <= 0 %}Tükendi{% elif s.miktar < 10 %}Kritik{% else %}Yeterli{% endif %}
+                                    </span>
+                                </div>
+                                {% set pct = (s.miktar / 50 * 100)|round %}
+                                {% if pct > 100 %}{% set pct = 100 %}{% endif %}
+                                <div class="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                                    <div class="h-full rounded-full transition-all duration-1000 {% if s.miktar <= 0 %}bg-red-500{% elif s.miktar < 10 %}bg-orange-500{% else %}bg-emerald-500{% endif %}" style="width: {{ pct }}%"></div>
+                                </div>
+                            </td>
+                            {% if session.rol == 'admin' %}
+                            <td class="p-6 text-right align-middle">
+                                <div class="flex justify-end items-center gap-3">
+                                    <form action="/depo" method="POST" class="m-0 flex items-center gap-2" onsubmit="return confirm('Stok miktarını değiştirmek üzeresiniz. Emin misiniz?');">
+                                        <input type="hidden" name="islem_tipi" value="manuel_sayim"><input type="hidden" name="urun_id" value="{{ s.id }}">
+                                        <input type="number" step="0.01" name="yeni_miktar" value="{{ s.miktar }}" required class="w-20 border-2 border-gray-100 p-2 rounded-xl font-black text-center outline-none bg-white focus:border-indigo-400 transition text-sm">
+                                        <button type="submit" class="bg-white border border-gray-200 hover:bg-indigo-600 hover:text-white text-gray-600 font-black px-3 py-2 rounded-xl text-[10px] uppercase tracking-widest transition-all shadow-sm" title="Kaydet">✓</button>
+                                    </form>
+                                    <button onclick="openAyarModal({{ s.id }}, '{{ s.urun_adi }}')" class="w-10 h-10 flex items-center justify-center bg-white hover:bg-gray-800 hover:text-white text-gray-500 rounded-xl transition-colors border border-gray-200 shadow-sm" title="Ayarlar & Geçmiş">
+                                        ⚙️
+                                    </button>
+                                </div>
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="3" class="p-16 text-center font-bold text-gray-400">Depoda hiç ürün bulunmuyor.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
     </div>
 
     <script>
@@ -391,7 +405,6 @@
                     let markaHtml = '';
                     if(markalar.length > 0) {
                         markalar.forEach(m => {
-                            // JAVASCRIPT GÖRÜNÜMÜ İÇİN DE SIFIRLAR ATILDI
                             let islenmisMiktar = Number(parseFloat(m.miktar).toFixed(2));
                             markaHtml += `<div class="bg-indigo-50 border border-indigo-100 p-3 rounded-xl shadow-sm text-center">
                                 <span class="block text-[10px] font-black text-indigo-500 uppercase tracking-widest truncate" title="${m.marka}">${m.marka}</span>
@@ -434,7 +447,6 @@
                 let renk = kayit.tip === 'GİRİŞ' || kayit.tip === 'ÜRETİM' ? 'text-green-600 bg-green-50 border-green-100' : 'text-orange-600 bg-orange-50 border-orange-100';
                 let ikon = kayit.tip === 'GİRİŞ' || kayit.tip === 'ÜRETİM' ? '📥' : '📤';
                 
-                // JAVASCRIPT GEÇMİŞİ İÇİN SIFIRLAR ATILDI
                 let miktarGosterim = Number(parseFloat(kayit.miktar).toFixed(2));
                 
                 let html = `
