@@ -1087,17 +1087,35 @@ def satis():
     f_tahsilat = request.args.get('f_tahsilat', 'Tümü')
     mevcut_ay = secilen_tarih[:7]
 
-    # --- OTOMATİK VERİTABANI GÜNCELLEMESİ (Sütunlar yoksa ekler) ---
+    # --- OTOMATİK VERİTABANI GÜNCELLEMELERİ ---
     try: conn.execute("ALTER TABLE etkinlikler ADD COLUMN belge_yolu TEXT"); conn.commit()
     except: pass
     try: conn.execute("ALTER TABLE dis_paydas_satis ADD COLUMN dekont_yolu TEXT"); conn.commit()
     except: pass
+    
+    # YENİ: Lokma Dağıtımları Tablosu
+    try:
+        conn.execute('''CREATE TABLE IF NOT EXISTS lokma_dagitimlari (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tarih TEXT, kampus TEXT, kisi_firma_adi TEXT,
+            resmi_yazi_yolu TEXT, hijyen_belgesi_yolu TEXT, firma_kayit_belgesi_yolu TEXT
+        )''')
+        conn.commit()
+    except: pass
 
-    # Dosyaların kaydedileceği klasörlerin var olduğundan emin ol
     os.makedirs('static/uploads/belgeler', exist_ok=True)
     os.makedirs('static/uploads/dekontlar', exist_ok=True)
     from werkzeug.utils import secure_filename
     import time
+
+    # Yardımcı Dosya Kaydetme Fonksiyonu
+    def save_doc(file_obj):
+        if file_obj and file_obj.filename:
+            fname = f"{int(time.time())}_{secure_filename(file_obj.filename)}"
+            path = os.path.join('static/uploads/belgeler', fname)
+            file_obj.save(path)
+            return f"/static/uploads/belgeler/{fname}"
+        return ""
 
     if request.method == 'POST':
         islem = request.form.get('islem_tipi')
@@ -1116,27 +1134,15 @@ def satis():
             kampus = request.form.get('kampus', 'Davutpaşa Merkez')
             turu = request.form.get('turu', 'Dış Paydaş')
 
-            # Dekont Yükleme İşlemi
-            dekont = request.files.get('dekont')
-            dekont_yolu = ""
-            if dekont and dekont.filename:
-                filename = f"{int(time.time())}_{secure_filename(dekont.filename)}"
-                path = os.path.join('static/uploads/dekontlar', filename)
-                dekont.save(path)
-                dekont_yolu = f"/static/uploads/dekontlar/{filename}"
-
+            dekont_yolu = save_doc(request.files.get('dekont'))
             genel_toplam_tutar = 0
             genel_toplam_kisi = 0
             detay_log = []
 
             for i in range(len(kişiler)):
                 if not kişiler[i] or int(kişiler[i]) <= 0: continue
-
-                t_val = float(tarifeler[i])
-                kisi_sayisi = int(kişiler[i])
-                mevcut_ogun = ogünler[i]
-                mevcut_tarih = tarihler[i] if tarihler and i < len(tarihler) else islem_tarihi
-
+                t_val = float(tarifeler[i]); kisi_sayisi = int(kişiler[i])
+                mevcut_ogun = ogünler[i]; mevcut_tarih = tarihler[i] if tarihler and i < len(tarihler) else islem_tarihi
                 genel_toplam_tutar += kisi_sayisi * t_val
                 genel_toplam_kisi += kisi_sayisi
                 detay_log.append(f"{mevcut_tarih[-5:]} {mevcut_ogun[:3]}: {kisi_sayisi}K ({int(t_val)}₺)")
@@ -1162,15 +1168,7 @@ def satis():
             tarih = request.form['tarih']
             kisi = request.form['kisi_sayisi']
             adi = request.form['adi']
-
-            # Belge Yükleme İşlemi
-            belge = request.files.get('belge')
-            belge_yolu = ""
-            if belge and belge.filename:
-                filename = f"{int(time.time())}_{secure_filename(belge.filename)}"
-                path = os.path.join('static/uploads/belgeler', filename)
-                belge.save(path)
-                belge_yolu = f"/static/uploads/belgeler/{filename}"
+            belge_yolu = save_doc(request.files.get('belge'))
 
             conn.execute("INSERT INTO etkinlikler (tarih, bitis_tarihi, adi, kisi_sayisi, notlar, kampus, ogun, belge_yolu) VALUES (?,?,?,?,?,?,?,?)",
                          (tarih, request.form.get('bitis_tarihi'), adi, int(kisi), request.form.get('notlar', ''), request.form.get('kampus', 'Davutpaşa Merkez'), request.form.get('ogun', 'Öğle Yemeği'), belge_yolu))
@@ -1178,18 +1176,44 @@ def satis():
                          (tarih, f"🎉 ETKİNLİK: {adi} ({kisi} Kişi)", '#4f46e5', '/satis', request.form.get('bitis_tarihi', ''), 'Günlük' if request.form.get('bitis_tarihi') else 'Tek Seferlik'))
             conn.commit(); flash("Planlama tamamlandı ve belge arşivlendi.", "success")
 
+        # --- YENİ: LOKMA DAĞITIMI EKLEME ---
+        elif islem == 'lokma_ekle':
+            tarih = request.form['tarih']
+            kampus = request.form['kampus']
+            kisi_firma_adi = request.form['kisi_firma_adi']
+
+            r_yazi = save_doc(request.files.get('resmi_yazi'))
+            h_belge = save_doc(request.files.get('hijyen_belgesi'))
+            f_kayit = save_doc(request.files.get('firma_kayit_belgesi'))
+
+            conn.execute('''INSERT INTO lokma_dagitimlari 
+                            (tarih, kampus, kisi_firma_adi, resmi_yazi_yolu, hijyen_belgesi_yolu, firma_kayit_belgesi_yolu) 
+                            VALUES (?,?,?,?,?,?)''', 
+                            (tarih, kampus, kisi_firma_adi, r_yazi, h_belge, f_kayit))
+            
+            # Ajandaya Turuncu Uyarı Gönder
+            conn.execute("INSERT INTO ajanda (tarih, not_icerik, renk_kodu, url, periyot) VALUES (?,?,?,?,?)",
+                         (tarih, f"🍩 LOKMA: {kisi_firma_adi} ({kampus})", '#f59e0b', '/satis', 'Tek Seferlik'))
+            
+            conn.commit(); flash("🍩 Lokma dağıtımı başarıyla planlandı ve Ajandaya işlendi.", "success")
+
+        # --- YENİ: LOKMA SİLME ---
+        elif islem == 'lokma_sil':
+            l_id = request.form['lokma_id']
+            lokma = conn.execute("SELECT * FROM lokma_dagitimlari WHERE id=?", (l_id,)).fetchone()
+            if lokma:
+                conn.execute("DELETE FROM ajanda WHERE not_icerik LIKE ?", (f"%LOKMA: {lokma['kisi_firma_adi']}%",))
+            conn.execute("DELETE FROM lokma_dagitimlari WHERE id=?", (l_id,))
+            conn.commit(); flash("Lokma dağıtımı iptal edildi ve Ajandadan silindi.", "success")
+
         elif islem == 'durum_guncelle':
             satis_id = request.form.get('satis_id')
             t_dur = request.form.get('tahsilat_durumu')
             f_dur = request.form.get('firma_odeme_durumu')
 
-            # YENİ: Durum güncellenirken dekont da yüklendiyse onu yakala ve arşive ekle
             dekont = request.files.get('dekont')
             if dekont and dekont.filename:
-                filename = f"{int(time.time())}_{secure_filename(dekont.filename)}"
-                path = os.path.join('static/uploads/dekontlar', filename)
-                dekont.save(path)
-                dekont_yolu = f"/static/uploads/dekontlar/{filename}"
+                dekont_yolu = save_doc(dekont)
                 conn.execute("UPDATE dis_paydas_satis SET dekont_yolu=? WHERE id=?", (dekont_yolu, satis_id))
 
             if t_dur and f_dur:
@@ -1217,39 +1241,32 @@ def satis():
 
         return redirect(url_for('satis', tarih=request.form.get('islem_tarihi', secilen_tarih), f_kampus=f_kampus, f_fiyat=f_fiyat, f_tahsilat=f_tahsilat))
 
-    # Satış Listesi
     dis_paydaslar = conn.execute("""
         SELECT * FROM dis_paydas_satis
-        WHERE NOT (
-            (tahsilat_durumu LIKE '✅%' OR tahsilat_durumu LIKE '🎁%')
-            AND
-            (firma_odeme_durumu LIKE '✅%' OR firma_odeme_durumu LIKE '❌%')
-        )
+        WHERE NOT ((tahsilat_durumu LIKE '✅%' OR tahsilat_durumu LIKE '🎁%') AND (firma_odeme_durumu LIKE '✅%' OR firma_odeme_durumu LIKE '❌%'))
         ORDER BY tarih DESC, id DESC
     """).fetchall()
 
-    # YENİ: Etkinlikler son eklenen en üste gelsin diye ORDER BY id DESC yapıldı
     etkinlikler = conn.execute('SELECT * FROM etkinlikler ORDER BY id DESC').fetchall()
+    
+    # Lokma listesini çek
+    lokmalar = conn.execute("SELECT * FROM lokma_dagitimlari ORDER BY tarih DESC").fetchall()
 
-    # Bilanço Sorgusu
     query = "SELECT * FROM dis_paydas_satis WHERE tarih LIKE ?"
     params = [f"{mevcut_ay}%"]
 
     if f_tahsilat == 'Tümü':
         query += " AND (tahsilat_durumu LIKE '✅%' OR tahsilat_durumu LIKE '🎁%') AND (firma_odeme_durumu LIKE '✅%' OR firma_odeme_durumu LIKE '❌%')"
-    elif f_tahsilat == 'Vakıf':
-        query += " AND tahsilat_durumu LIKE ?"; params.append("%Vakıf%")
-    elif f_tahsilat == 'Ödendi':
-        query += " AND tahsilat_durumu LIKE ?"; params.append("%Ödendi%")
-    elif f_tahsilat == 'Bekliyor':
-        query += " AND tahsilat_durumu LIKE ? AND tahsilat_durumu NOT LIKE ?"; params.append("%Bekliyor%"); params.append("%Vakıf%")
+    elif f_tahsilat == 'Vakıf': query += " AND tahsilat_durumu LIKE ?"; params.append("%Vakıf%")
+    elif f_tahsilat == 'Ödendi': query += " AND tahsilat_durumu LIKE ?"; params.append("%Ödendi%")
+    elif f_tahsilat == 'Bekliyor': query += " AND tahsilat_durumu LIKE ? AND tahsilat_durumu NOT LIKE ?"; params.append("%Bekliyor%"); params.append("%Vakıf%")
 
     if f_kampus != 'Tümü': query += " AND kampus = ?"; params.append(f_kampus)
     if f_fiyat != 'Tümü': query += " AND tarife = ?"; params.append(f"{f_fiyat} TL")
 
     gelenler_aylik = conn.execute(query, params).fetchall()
     conn.close()
-    return render_template('satis.html', dis_paydaslar=dis_paydaslar, etkinlikler=etkinlikler, gelenler_aylik=gelenler_aylik, secilen_tarih=secilen_tarih, f_kampus=f_kampus, f_fiyat=f_fiyat, f_tahsilat=f_tahsilat)
+    return render_template('satis.html', dis_paydaslar=dis_paydaslar, etkinlikler=etkinlikler, lokmalar=lokmalar, gelenler_aylik=gelenler_aylik, secilen_tarih=secilen_tarih, f_kampus=f_kampus, f_fiyat=f_fiyat, f_tahsilat=f_tahsilat)
 
 @app.route('/et-isleme', methods=['GET', 'POST'])
 @login_required

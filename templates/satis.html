@@ -119,13 +119,16 @@
             <div class="flex gap-2 mb-8 bg-slate-200/50 p-1.5 rounded-2xl w-max shadow-inner overflow-x-auto max-w-full">
                 <button id="btn-tab-satis" onclick="openTab('tab-satis')" class="tab-btn bg-transparent text-slate-500 hover:bg-slate-100 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition whitespace-nowrap">💵 Satış & Tahsilat</button>
                 <button id="btn-tab-etkinlik" onclick="openTab('tab-etkinlik')" class="tab-btn bg-transparent text-slate-500 hover:bg-slate-100 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition whitespace-nowrap">🎉 Etkinlik Planla</button>
+                <button id="btn-tab-lokma" onclick="openTab('tab-lokma')" class="tab-btn bg-transparent text-slate-500 hover:bg-slate-100 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition whitespace-nowrap">🍩 Lokma Dağıtımı</button>
                 <button id="btn-tab-muhasebe" onclick="openTab('tab-muhasebe')" class="tab-btn bg-transparent text-slate-500 hover:bg-slate-100 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition whitespace-nowrap">📈 Aylık Bilanço</button>
             </div>
 
+            <!-- ========================================== -->
+            <!-- SEKME 1: SATIŞ VE TAHSİLAT -->
+            <!-- ========================================== -->
             <div id="tab-satis" class="tab-content hidden space-y-8">
                 <div class="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200">
                     <h3 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-2">➕ Satış / Gerçekleşen Kayıt Ekle</h3>
-                    
                     <form action="/satis" method="POST" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-4 gap-5 items-end">
                         <input type="hidden" name="islem_tipi" value="dis_paydas_ekle">
                         <input type="hidden" name="islem_tarihi" value="{{ secilen_tarih }}">
@@ -277,9 +280,12 @@
                 </div>
             </div>
 
+            <!-- ========================================== -->
+            <!-- SEKME 2: ETKİNLİK PLANLAMA -->
+            <!-- ========================================== -->
             <div id="tab-etkinlik" class="tab-content hidden space-y-8">
                 <div class="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200">
-                    <h3 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-2">📅 Çok Günlü Organizasyon Planla</h3>
+                    <h3 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-2">📅 Organizasyon & Etkinlik Planla</h3>
                     
                     <form action="/satis" method="POST" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-4 gap-5 items-end" onsubmit="localStorage.setItem('satisSekme', 'tab-etkinlik');">
                         <input type="hidden" name="islem_tipi" value="etkinlik_ekle">
@@ -299,7 +305,7 @@
                             </select>
                         </div>
                         <div>
-                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-2">Öğün (Planlanan)</label>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-2">Öğün</label>
                             <select name="ogun" class="w-full border-2 border-slate-100 p-3.5 rounded-xl font-bold bg-slate-50 focus:border-indigo-400 outline-none text-sm transition">
                                 <option value="Öğle Yemeği">Öğle Yemeği</option><option value="Akşam Yemeği">Akşam Yemeği</option><option value="Diğer">Diğer</option>
                             </select>
@@ -308,12 +314,10 @@
                             <label class="block text-[10px] font-black text-slate-400 uppercase mb-2">Etkinlik / Kafile Adı</label>
                             <input type="text" name="adi" placeholder="Örn: 2026 Bahar Şenliği Yemekleri" required class="w-full border-2 border-slate-100 p-3.5 rounded-xl font-bold bg-slate-50 focus:border-indigo-400 outline-none text-sm transition">
                         </div>
-                        
                         <div class="md:col-span-1">
                             <label class="block text-[10px] font-black text-slate-400 uppercase mb-2">Resmi Yazı / Belge</label>
                             <input type="file" name="belge" accept=".pdf, .jpg, .png, .docx" class="w-full border-2 border-slate-100 p-2 rounded-xl text-sm font-bold bg-slate-50 outline-none focus:border-indigo-400 transition file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-[9px] file:uppercase file:tracking-widest file:font-black file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300 cursor-pointer">
                         </div>
-
                         <div>
                             <label class="block text-[10px] font-black text-slate-400 uppercase mb-2">Kişi Sayısı</label>
                             <input type="number" name="kisi_sayisi" required class="w-full border-2 border-slate-100 p-3.5 rounded-xl font-black bg-slate-50 text-center focus:border-indigo-400 outline-none text-sm transition">
@@ -366,7 +370,6 @@
                                                 ✅ Ödemeye Aktar
                                             </button>
                                             {% endif %}
-                                            
                                             <form action="/satis" method="POST" class="m-0" onsubmit="return confirm('İptal edip Ajanda\'dan silmek istediğinize emin misiniz?');">
                                                 <input type="hidden" name="islem_tipi" value="etkinlik_sil"><input type="hidden" name="etkinlik_id" value="{{ e.id }}">
                                                 <button type="submit" class="text-rose-500 hover:text-white hover:bg-rose-500 font-bold text-[9px] bg-white px-3 py-2 rounded-lg border border-rose-200 transition shadow-sm uppercase tracking-widest whitespace-nowrap">❌ Sil</button>
@@ -377,22 +380,103 @@
                                 {% else %}
                                 <tr><td colspan="5" class="p-10 text-center font-bold text-slate-400 text-xs uppercase tracking-widest">Planlanan bir etkinlik bulunmuyor.</td></tr>
                                 {% endfor %}
-
-                                {% if etkinlikler|length > 5 %}
-                                <tr id="etkinlik-show-more">
-                                    <td colspan="5" class="p-4 text-center">
-                                        <button type="button" onclick="document.querySelectorAll('.etkinlik-gizli').forEach(el => el.classList.remove('hidden')); this.closest('tr').remove();" class="bg-slate-50 hover:bg-slate-100 text-slate-600 font-black text-[10px] px-6 py-3 rounded-xl uppercase tracking-widest transition shadow-sm border border-slate-200">
-                                            Daha Fazlasını Gör (Toplam {{ etkinlikler|length }} Kayıt) ⬇️
-                                        </button>
-                                    </td>
-                                </tr>
-                                {% endif %}
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
+            <!-- ========================================== -->
+            <!-- YENİ SEKME 3: LOKMA DAĞITIMLARI -->
+            <!-- ========================================== -->
+            <div id="tab-lokma" class="tab-content hidden space-y-8">
+                <div class="bg-amber-50 p-6 md:p-8 rounded-[2rem] shadow-sm border border-amber-200">
+                    <h3 class="text-lg font-black text-amber-900 mb-6 flex items-center gap-2">🍩 Dışarıdan Gelen İkram / Lokma Planla</h3>
+                    
+                    <form action="/satis" method="POST" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-3 gap-5 items-end" onsubmit="localStorage.setItem('satisSekme', 'tab-lokma');">
+                        <input type="hidden" name="islem_tipi" value="lokma_ekle">
+                        
+                        <div>
+                            <label class="block text-[10px] font-black text-amber-700 uppercase mb-2">Dağıtım Tarihi</label>
+                            <input type="date" name="tarih" required class="w-full border-2 border-amber-100 p-3.5 rounded-xl font-bold bg-white focus:border-amber-400 outline-none text-sm transition text-amber-900">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black text-amber-700 uppercase mb-2">Kampüs Seçimi</label>
+                            <select name="kampus" class="w-full border-2 border-amber-100 p-3.5 rounded-xl font-bold bg-white focus:border-amber-400 outline-none text-sm transition text-amber-900">
+                                <option value="Davutpaşa Merkez">Davutpaşa Merkez</option><option value="Davutpaşa Butik">Davutpaşa Butik</option><option value="Beşiktaş">Beşiktaş</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black text-amber-700 uppercase mb-2">Dağıtacak Kişi / Firma Adı</label>
+                            <input type="text" name="kisi_firma_adi" placeholder="Örn: Ahmet Yılmaz Hayratı" required class="w-full border-2 border-amber-100 p-3.5 rounded-xl font-bold bg-white focus:border-amber-400 outline-none text-sm transition text-amber-900">
+                        </div>
+                        
+                        <div class="md:col-span-3 bg-white p-4 rounded-xl border border-amber-100 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-500 uppercase mb-2">📄 Resmi Yazı</label>
+                                <input type="file" name="resmi_yazi" accept=".pdf,.jpg,.png" class="w-full border border-slate-100 p-1.5 rounded-lg text-[10px] font-bold bg-slate-50 outline-none file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[9px] file:uppercase file:font-black file:bg-amber-100 file:text-amber-700 cursor-pointer">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-500 uppercase mb-2">🧼 Hijyen Belgesi</label>
+                                <input type="file" name="hijyen_belgesi" accept=".pdf,.jpg,.png" class="w-full border border-slate-100 p-1.5 rounded-lg text-[10px] font-bold bg-slate-50 outline-none file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[9px] file:uppercase file:font-black file:bg-amber-100 file:text-amber-700 cursor-pointer">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-500 uppercase mb-2">🏢 Firma Kayıt Belgesi</label>
+                                <input type="file" name="firma_kayit_belgesi" accept=".pdf,.jpg,.png" class="w-full border border-slate-100 p-1.5 rounded-lg text-[10px] font-bold bg-slate-50 outline-none file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[9px] file:uppercase file:font-black file:bg-amber-100 file:text-amber-700 cursor-pointer">
+                            </div>
+                        </div>
+
+                        <div class="md:col-span-3">
+                            <button type="submit" class="w-full bg-amber-500 text-white font-black py-4 rounded-xl hover:bg-amber-600 transition shadow-sm text-xs uppercase tracking-widest">Sisteme ve Ajandaya İşle</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-slate-50 border-b border-slate-200 p-6">
+                        <h3 class="text-slate-800 font-black text-sm uppercase tracking-widest">📋 Planlanan İkram / Lokma Takvimi</h3>
+                    </div>
+                    
+                    <div class="p-0 overflow-x-auto w-full table-container custom-scrollbar">
+                        <table class="w-full text-left text-sm whitespace-nowrap">
+                            <thead class="text-slate-400 bg-white border-b border-slate-100 uppercase text-[10px] tracking-widest">
+                                <tr><th class="p-5">Dağıtım Bilgisi</th><th class="p-5 text-center">Tarih</th><th class="p-5">Yüklenen Belgeler</th><th class="p-5 text-right">İşlem</th></tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-50">
+                                {% for l in lokmalar %}
+                                <tr class="hover:bg-amber-50/30 transition">
+                                    <td class="p-5">
+                                        <span class="block font-black text-slate-800 text-base mb-1">{{ l.kisi_firma_adi }}</span>
+                                        <span class="text-[9px] bg-slate-100 border border-slate-200 px-2 py-1 rounded text-slate-500 font-bold uppercase tracking-widest">{{ l.kampus }}</span>
+                                    </td>
+                                    <td class="p-5 text-center font-bold text-slate-600">{{ l.tarih }}</td>
+                                    <td class="p-5">
+                                        <div class="flex gap-2">
+                                            {% if l.resmi_yazi_yolu %} <a href="{{ l.resmi_yazi_yolu }}" target="_blank" class="bg-slate-100 text-slate-600 px-2 py-1 rounded text-[9px] uppercase font-black hover:bg-slate-200 transition">📄 Resmi Yazı</a> {% endif %}
+                                            {% if l.hijyen_belgesi_yolu %} <a href="{{ l.hijyen_belgesi_yolu }}" target="_blank" class="bg-emerald-50 text-emerald-600 px-2 py-1 rounded text-[9px] uppercase font-black hover:bg-emerald-100 transition">🧼 Hijyen</a> {% endif %}
+                                            {% if l.firma_kayit_belgesi_yolu %} <a href="{{ l.firma_kayit_belgesi_yolu }}" target="_blank" class="bg-indigo-50 text-indigo-600 px-2 py-1 rounded text-[9px] uppercase font-black hover:bg-indigo-100 transition">🏢 Firma Kayıt</a> {% endif %}
+                                        </div>
+                                    </td>
+                                    <td class="p-5 text-right">
+                                        <form action="/satis" method="POST" class="m-0" onsubmit="return confirm('Bu ikram kaydını silmek istediğinize emin misiniz?');">
+                                            <input type="hidden" name="islem_tipi" value="lokma_sil">
+                                            <input type="hidden" name="lokma_id" value="{{ l.id }}">
+                                            <button type="submit" class="text-rose-500 hover:text-white hover:bg-rose-500 font-bold text-[10px] bg-white px-3 py-2 rounded-lg border border-rose-200 transition shadow-sm uppercase tracking-widest">❌ İptal</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr><td colspan="4" class="p-10 text-center font-bold text-slate-400 text-xs uppercase tracking-widest">Kayıtlı lokma / ikram dağıtımı bulunmuyor.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- SEKME 4: AYLIK BİLANÇO -->
+            <!-- ========================================== -->
             <div id="tab-muhasebe" class="tab-content hidden space-y-6">
                 <div class="bg-slate-800 p-6 rounded-[2rem] shadow-sm border border-slate-700">
                     <form method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end" onsubmit="localStorage.setItem('satisSekme', 'tab-muhasebe');">
@@ -472,6 +556,7 @@
         </div>
     </div>
 
+    <!-- MODAL: SATIŞA AKTARMA -->
     <div id="transferModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] items-center justify-center p-4">
         <div class="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden transform transition-all">
             <div class="bg-slate-50 p-6 flex justify-between items-center border-b border-slate-200">
@@ -529,6 +614,7 @@
         </div>
     </div>
 
+    <!-- MODAL: DURUM GÜNCELLE -->
     <div id="statusModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] items-center justify-center p-4">
         <div class="bg-white w-full max-w-sm rounded-[2rem] shadow-2xl border border-slate-200 overflow-hidden transform transition-all">
             <div class="bg-slate-50 p-5 flex justify-between items-center border-b border-slate-200">
