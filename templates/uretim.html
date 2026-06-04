@@ -65,6 +65,7 @@
                     <option value="Öğle Yemeği" {% if secilen_ogun == 'Öğle Yemeği' %}selected{% endif %}>Öğle Yemeği</option>
                     <option value="Akşam Yemeği" {% if secilen_ogun == 'Akşam Yemeği' %}selected{% endif %}>Akşam Yemeği</option>
                     <option value="Kahvaltı" {% if secilen_ogun == 'Kahvaltı' %}selected{% endif %}>Kahvaltı</option>
+                    <option value="❄️ Donmuş Hazırlık" {% if secilen_ogun == '❄️ Donmuş Hazırlık' %}selected{% endif %}>❄️ Donmuş Hazırlık (Dondurucuya)</option>
                     <option value="Tümü" {% if secilen_ogun == 'Tümü' %}selected{% endif %}>Tüm Öğünler</option>
                 </select>
             </form>
@@ -122,6 +123,7 @@
                                     <option value="Öğle Yemeği" {% if secilen_ogun == 'Öğle Yemeği' %}selected{% endif %}>Öğle Yemeği</option>
                                     <option value="Akşam Yemeği" {% if secilen_ogun == 'Akşam Yemeği' %}selected{% endif %}>Akşam Yemeği</option>
                                     <option value="Kahvaltı" {% if secilen_ogun == 'Kahvaltı' %}selected{% endif %}>Kahvaltı</option>
+                                    <option value="❄️ Donmuş Hazırlık" {% if secilen_ogun == '❄️ Donmuş Hazırlık' %}selected{% endif %}>❄️ Donmuş Hazırlık (Dondurucuya)</option>
                                 </select>
                             </div>
                             <div class="w-full sm:w-2/3">
@@ -268,7 +270,7 @@
                                     <div class="flex items-center gap-4 w-full md:w-auto justify-end">
                                         {% if u.durum == 'Dağıtıldı' %}
                                             <span class="font-black text-emerald-600 text-[11px] uppercase tracking-widest flex items-center gap-1.5 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">
-                                                DAĞITILDI ({{ u.gerceklesen_kisi }} Kişi)
+                                                {% if u.ogun == '❄️ Donmuş Hazırlık' %}DONDURUCUYA EKLENDİ{% else %}DAĞITILDI{% endif %} ({{ u.gerceklesen_kisi }} {% if u.ogun == '❄️ Donmuş Hazırlık' %}Pors.{% else %}Kişi{% endif %})
                                             </span>
                                         {% elif u.durum == 'Üretimde' %}
                                             <span class="font-black text-sky-600 text-[11px] uppercase tracking-widest flex items-center gap-1.5 bg-sky-50 px-2 py-1 rounded-md border border-sky-100">
@@ -350,7 +352,9 @@
                                             {% elif u.durum == 'Üretimde' %}
                                                 <form action="/uretim" method="POST" class="bg-sky-50 p-4 rounded-xl border border-sky-200 shadow-inner">
                                                     <input type="hidden" name="islem_tipi" value="gun_sonu"><input type="hidden" name="uretim_id" value="{{ u.id }}"><input type="hidden" name="mevcut_tarih" value="{{ secilen_tarih }}"><input type="hidden" name="mevcut_ogun" value="{{ secilen_ogun }}">
-                                                    <label class="block text-[10px] font-black text-sky-700 uppercase tracking-widest mb-2">Dağıtılan (Servis Edilen)</label>
+                                                    <label class="block text-[10px] font-black text-sky-700 uppercase tracking-widest mb-2">
+                                                        {% if u.ogun == '❄️ Donmuş Hazırlık' %}Dondurucuya Atılan (Porsiyon){% else %}Dağıtılan (Servis Edilen){% endif %}
+                                                    </label>
                                                     <div class="flex gap-2">
                                                         <input type="number" name="gerceklesen" required class="flex-1 min-w-0 p-2 rounded-xl border border-sky-200 text-center font-black text-lg outline-none text-sky-900 bg-white focus:border-sky-500 transition shadow-sm">
                                                         <button type="submit" class="bg-sky-600 text-white text-[10px] uppercase font-black px-4 py-2 rounded-xl hover:bg-sky-700 shadow-md shrink-0 transition">Bitir</button>
@@ -363,8 +367,10 @@
 
                                             {% elif u.durum == 'Dağıtıldı' %}
                                                 <div class="bg-emerald-50 p-4 rounded-xl border border-emerald-100 text-center shadow-inner">
-                                                    <span class="block text-emerald-700 font-black text-sm mb-3">Başarıyla Dağıtıldı</span>
-                                                    <form action="/uretim" method="POST" class="m-0" onsubmit="return confirm('Dağıtımı iptal edip tekrar üretim aşamasına almak istiyor musunuz?');">
+                                                    <span class="block text-emerald-700 font-black text-sm mb-3">
+                                                        {% if u.ogun == '❄️ Donmuş Hazırlık' %}Dondurucuya Aktarıldı ❄️{% else %}Başarıyla Dağıtıldı ✅{% endif %}
+                                                    </span>
+                                                    <form action="/uretim" method="POST" class="m-0" onsubmit="return confirm('İşlemi iptal edip tekrar üretim aşamasına almak istiyor musunuz?');">
                                                         <input type="hidden" name="islem_tipi" value="gun_sonu_iptal"><input type="hidden" name="uretim_id" value="{{ u.id }}"><input type="hidden" name="mevcut_tarih" value="{{ secilen_tarih }}"><input type="hidden" name="mevcut_ogun" value="{{ secilen_ogun }}">
                                                         <button type="submit" class="text-[9px] text-slate-500 hover:text-slate-800 font-bold uppercase tracking-widest bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm w-full transition">Geri Al / Düzelt</button>
                                                     </form>

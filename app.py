@@ -482,6 +482,17 @@ def ajanda_sil():
 @login_required
 def mal_kabul():
     conn = get_db_connection()
+    bugun_str = date.today().strftime('%Y-%m-%d') # Dondurucu logu için tarih
+    
+    # ❄️ GÜVENLİK KALKANI: Tablo yoksa oluştur
+    try:
+        conn.execute('''CREATE TABLE IF NOT EXISTS dondurucu_stok (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            urun_adi TEXT, miktar REAL, birim TEXT, tur TEXT, islem_tarihi TEXT
+        )''')
+        conn.commit()
+    except: pass
+
     if request.method == 'POST':
         islem = request.form.get('islem_tipi')
 
@@ -523,11 +534,15 @@ def mal_kabul():
 
                 conn.execute('INSERT INTO stok_lotlari (urun_adi, marka, lot_damga_no, baslangic_miktar, kalan_miktar, birim, skt, takim_sayisi) VALUES (?,?,?,?,?,?,?,?)',
                              (urun, marka, lot_no, miktar, miktar, birim, skt, takim))
+                             
+                # ❄️ YENİ: Hazır Yemekse Dondurucuya Ekle
+                if kategori == '❄️ Donmuş Hazır Yemek':
+                    conn.execute("INSERT INTO dondurucu_stok (urun_adi, miktar, birim, tur, islem_tarihi) VALUES (?, ?, ?, 'Hazır Mal Kabul', ?)", (urun, miktar, birim, bugun_str))
 
             conn.commit()
             if session['rol'] == 'depocu': flash("Mal kabul talebi oluşturuldu. Onay bekleniyor.", "success")
             elif onay_durumu == 'Red (İade)': flash("Mal reddedildi. Arşive işlendi.", "success")
-            else: flash(f"✅ {urun} depoya ve Marka Takip sistemine eklendi ({onay_durumu}).", "success")
+            else: flash(f"✅ {urun} depoya eklendi.", "success")
 
         elif islem == 'onayla' and session['rol'] == 'admin':
             log = conn.execute("SELECT * FROM mal_kabul_log WHERE id=?", (request.form['log_id'],)).fetchone()
@@ -538,6 +553,10 @@ def mal_kabul():
 
                 conn.execute('INSERT INTO stok_lotlari (urun_adi, marka, lot_damga_no, baslangic_miktar, kalan_miktar, birim, skt, takim_sayisi) VALUES (?,?,?,?,?,?,?,?)',
                              (log['urun_adi'], log['marka'], log['lot_damga_no'], log['miktar'], log['miktar'], log['birim'], log['skt'], log['takim_sayisi']))
+
+                # ❄️ YENİ: Hazır Yemekse Dondurucuya Ekle
+                if log['kategori'] == '❄️ Donmuş Hazır Yemek':
+                    conn.execute("INSERT INTO dondurucu_stok (urun_adi, miktar, birim, tur, islem_tarihi) VALUES (?, ?, ?, 'Hazır Mal Kabul', ?)", (log['urun_adi'], log['miktar'], log['birim'], bugun_str))
 
                 yeni_not = f"{log['notlar']} | Onaylayan: {session['isim']}".strip(" |")
                 conn.execute("UPDATE mal_kabul_log SET onay_durumu='Onaylandı', notlar=? WHERE id=?", (yeni_not, request.form['log_id']))
@@ -553,6 +572,10 @@ def mal_kabul():
 
                 conn.execute('INSERT INTO stok_lotlari (urun_adi, marka, lot_damga_no, baslangic_miktar, kalan_miktar, birim, skt, takim_sayisi) VALUES (?,?,?,?,?,?,?,?)',
                              (log['urun_adi'], log['marka'], log['lot_damga_no'], log['miktar'], log['miktar'], log['birim'], log['skt'], log['takim_sayisi']))
+
+                # ❄️ YENİ: Hazır Yemekse Dondurucuya Ekle
+                if log['kategori'] == '❄️ Donmuş Hazır Yemek':
+                    conn.execute("INSERT INTO dondurucu_stok (urun_adi, miktar, birim, tur, islem_tarihi) VALUES (?, ?, ?, 'Hazır Mal Kabul', ?)", (log['urun_adi'], log['miktar'], log['birim'], bugun_str))
 
                 eski_not = log['notlar'] if log['notlar'] else ""
                 yeni_not = f"{eski_not} | Şartlı Kabul: {session['isim']} (Sebep: {islem_notu})".strip(" |")
@@ -582,6 +605,19 @@ def mal_kabul():
 def depo():
     conn = get_db_connection()
     bugun = date.today().strftime('%Y-%m-%d')
+
+    # ❄️ YENİ: DONDURUCU STOK TABLOSU GÜVENLİK KALKANI
+    try:
+        conn.execute('''CREATE TABLE IF NOT EXISTS dondurucu_stok (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            urun_adi TEXT,
+            miktar REAL,
+            birim TEXT,
+            tur TEXT,
+            islem_tarihi TEXT
+        )''')
+        conn.commit()
+    except: pass
 
     if request.method == 'POST':
         islem = request.form.get('islem_tipi')
@@ -643,7 +679,6 @@ def depo():
             else:
                 flash(f"Hata: Depoda yeterli miktar bulunmuyor!", "error")
 
-        # 👑 YENİ: REÇETEYE GÖRE TOPLU MALZEME ÇIKIŞI (Yapay Zeka Mantığı)
         elif islem == 'toplu_recete_cikisi':
             hedef_uretim_val = request.form['toplu_uretim']
             porsiyon = int(request.form['porsiyon'])
@@ -657,7 +692,6 @@ def depo():
             ogun_secimi = parcalar[1].strip()
             hedef_yemek = parcalar[2].strip()
             
-            # Seçilen yemeğin reçetesini al
             recete = conn.execute("SELECT * FROM receteler WHERE yemek_adi=?", (hedef_yemek,)).fetchall()
             
             if not recete:
@@ -669,16 +703,11 @@ def depo():
 
             for r in recete:
                 d_m = conn.execute("SELECT id, miktar, birim FROM depo WHERE urun_adi COLLATE NOCASE = ?", (r['malzeme_adi'],)).fetchone()
-                
-                # GR hesabı KG'ye dönüştürülüyor
                 oran = 1000 if d_m and d_m['birim'].upper() in ['KG', 'LT'] else 1
                 gereken = (r['miktar'] * porsiyon) / oran
                 
                 if d_m and d_m['miktar'] >= gereken:
-                    # Depodan düş
                     conn.execute("UPDATE depo SET miktar = miktar - ? WHERE id=?", (gereken, d_m['id']))
-                    
-                    # FIFO (İlk giren ilk çıkar) mantığıyla marka stoklarından düş
                     lots = conn.execute("SELECT id, kalan_miktar, marka FROM stok_lotlari WHERE urun_adi COLLATE NOCASE=? AND kalan_miktar > 0 ORDER BY tarih ASC", (r['malzeme_adi'],)).fetchall()
                     kalan_dusulecek = gereken
                     kullanilan_marka = "Karışık Lot" if len(lots) > 1 else (lots[0]['marka'] if lots else 'Sistem/Eski Stok')
@@ -692,8 +721,6 @@ def depo():
                             conn.execute("UPDATE stok_lotlari SET kalan_miktar=kalan_miktar-? WHERE id=?", (kalan_dusulecek, lot['id']))
                             kalan_dusulecek = 0
                             
-                    # Depo çıkış logunu yaz
-                    onay = "Onaylandı" if session.get('rol') == 'admin' else "Bekliyor"
                     aciklama = f"Toplu Reçete Çıkışı ({porsiyon} Porsiyon) | İşlem: {session['isim']}"
                     conn.execute("INSERT INTO depo_cikis (tarih, ogun, yemek_adi, malzeme_adi, marka, miktar, birim, onay_durumu, aciklama) VALUES (?,?,?,?,?,?,?,'Onaylandı',?)",
                                  (islem_tarihi, ogun_secimi, hedef_yemek, r['malzeme_adi'], kullanilan_marka, gereken, d_m['birim'], aciklama))
@@ -705,13 +732,11 @@ def depo():
                     yetersiz_stoklar.append(f"{r['malzeme_adi']} (Gereken: {gereken} {birim_str}, Mevcut: {mevcut_miktar} {birim_str})")
 
             conn.commit()
-            
             if yetersiz_stoklar:
                 flash(f"Kısmi Çıkış Yapıldı! Şu ürünlerin stoğu yetersiz olduğu için çıkılamadı: {', '.join(yetersiz_stoklar)}", "error")
             elif basarili_cikislar:
                 flash(f"✅ '{hedef_yemek}' ({porsiyon} Kişi) için tüm reçete malzemeleri depodan mutfağa sevk edildi!", "success")
-                
-        # --- MEVCUT ONAY/RED İŞLEMLERİ ---
+
         elif islem == 'cikis_onayla' and session.get('rol') == 'admin':
             cikis = conn.execute("SELECT * FROM depo_cikis WHERE id=?", (request.form['cikis_id'],)).fetchone()
             if cikis and cikis['onay_durumu'] == 'Bekliyor':
@@ -744,10 +769,27 @@ def depo():
             conn.execute("UPDATE depo_cikis SET onay_durumu='Reddedildi', yemek_adi=? WHERE id=?", (yeni_detay, request.form['cikis_id']))
             flash("Çıkış talebi reddedildi.", "success")
 
+        # ❄️ YENİ: DONDURUCUDAN KULLANIM ÇIKIŞI YAPMA
+        elif islem == 'dondurucu_cikis':
+            d_id = request.form.get('dondurucu_id')
+            cikan_miktar = float(request.form.get('miktar'))
+            
+            mevcut = conn.execute("SELECT * FROM dondurucu_stok WHERE id=?", (d_id,)).fetchone()
+            if mevcut and mevcut['miktar'] >= cikan_miktar:
+                conn.execute("UPDATE dondurucu_stok SET miktar = miktar - ? WHERE id=?", (cikan_miktar, d_id))
+                # Stoğu sıfırlananı temizle
+                conn.execute("DELETE FROM dondurucu_stok WHERE miktar <= 0")
+                flash(f"❄️ Dondurucudan {cikan_miktar} {mevcut['birim']} {mevcut['urun_adi']} servise/kullanıma çıkarıldı.", "success")
+            else:
+                flash("Hata: Dondurucuda belirttiğiniz miktarda ürün bulunmuyor!", "error")
+
         conn.commit()
         return redirect(url_for('depo'))
 
     stoklar = conn.execute('SELECT * FROM depo ORDER BY kategori, urun_adi').fetchall()
+    
+    # ❄️ YENİ: DONDURUCU STOKLARINI ÇEK
+    dondurucu_stoklar = conn.execute("SELECT * FROM dondurucu_stok ORDER BY islem_tarihi DESC").fetchall()
 
     detayli_stoklar = []
     for s in stoklar:
@@ -768,8 +810,6 @@ def depo():
 
     bekleyen_cikislar = conn.execute("SELECT * FROM depo_cikis WHERE onay_durumu='Bekliyor' ORDER BY id DESC").fetchall()
     cikislar = conn.execute("SELECT * FROM depo_cikis WHERE onay_durumu='Onaylandı' ORDER BY id DESC LIMIT 30").fetchall()
-    
-    # 👑 BURASI DA ÇOK ÖNEMLİ (Toplu çıkış formu bu veriyi kullanıyor)
     planlananlar = conn.execute("SELECT tarih, ogun, yemek_adi FROM uretim WHERE durum IN ('Planlandı', 'Üretimde') AND tarih >= ? ORDER BY tarih ASC", (bugun,)).fetchall()
     
     kategoriler = []
@@ -779,7 +819,8 @@ def depo():
         if kat and kat not in kategoriler: kategoriler.append(kat)
 
     conn.close()
-    return render_template('depo.html', stoklar=stoklar, detayli_stoklar=detayli_stoklar, cikislar=cikislar, bekleyen_cikislar=bekleyen_cikislar, bugun=bugun, kategoriler=kategoriler, planlananlar=planlananlar)
+    return render_template('depo.html', stoklar=stoklar, detayli_stoklar=detayli_stoklar, cikislar=cikislar, bekleyen_cikislar=bekleyen_cikislar, bugun=bugun, kategoriler=kategoriler, planlananlar=planlananlar, dondurucu_stoklar=dondurucu_stoklar)
+
 # ==========================================
 # ÜRETİM VE HAFIZALI MENÜ PLANLAMA MOTORU
 # ==========================================
@@ -790,7 +831,6 @@ def uretim():
     conn = get_db_connection()
     bugun = date.today().strftime('%Y-%m-%d')
     
-    # --- VERİTABANI GÜNCELLEMESİ (Ekstra Kullanım Tablosu) ---
     conn.execute('''CREATE TABLE IF NOT EXISTS mutfak_ekstra_kullanim (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         tarih TEXT, ogun TEXT, yemek_adi TEXT, malzeme_adi TEXT, miktar REAL, birim TEXT
@@ -825,8 +865,6 @@ def uretim():
         elif islem == 'uretime_gonder':
             uretim_id = request.form['uretim_id']; planlanan = int(request.form['planlanan_kisi']); yemek_adi = request.form['yemek_adi']
             u = conn.execute("SELECT * FROM uretim WHERE id=?", (uretim_id,)).fetchone()
-            
-            # GÜVENLİK: dondurucudan_alinan NULL ise 0 say
             d_alinan = u['dondurucudan_alinan'] if u['dondurucudan_alinan'] else 0
             sifirdan_kisi = max(0, planlanan - d_alinan)
             receteler = conn.execute("SELECT * FROM receteler WHERE yemek_adi=?", (yemek_adi,)).fetchall()
@@ -853,7 +891,35 @@ def uretim():
                     conn.execute("UPDATE uretim SET planlanan_kisi=?, durum='Üretimde' WHERE id=?", (planlanan, uretim_id))
                     conn.commit(); flash(f"✅ '{yemek_adi}' üretime alındı. Mutfaktaki malzemeler kullanılıyor.", "success")
 
-        # --- YENİ: MUTFAK TEZGAHINDAKİ FAZLA ETİ YEMEĞE (KAZANA) KATMA İŞLEMİ ---
+        # ❄️ YENİ: DONDURUCU ENTEGRASYONU - ÜRETİM BİTİRME
+        elif islem == 'gun_sonu':
+            uretim_id = request.form['uretim_id']
+            gerceklesen = float(request.form['gerceklesen'])
+            u = conn.execute("SELECT yemek_adi, ogun FROM uretim WHERE id=?", (uretim_id,)).fetchone()
+            
+            if u and u['ogun'] == '❄️ Donmuş Hazırlık':
+                d_mevcut = conn.execute("SELECT id FROM dondurucu_stok WHERE urun_adi=? AND tur='Kendi Üretimimiz'", (u['yemek_adi'],)).fetchone()
+                if d_mevcut:
+                    conn.execute("UPDATE dondurucu_stok SET miktar = miktar + ?, islem_tarihi=? WHERE id=?", (gerceklesen, m_tarih, d_mevcut['id']))
+                else:
+                    conn.execute("INSERT INTO dondurucu_stok (urun_adi, miktar, birim, tur, islem_tarihi) VALUES (?, ?, 'Porsiyon', 'Kendi Üretimimiz', ?)", (u['yemek_adi'], gerceklesen, m_tarih))
+                flash(f"❄️ {gerceklesen} porsiyon '{u['yemek_adi']}' dondurucu stoklarına başarıyla eklendi.", "success")
+            
+            conn.execute("UPDATE uretim SET gerceklesen_kisi=?, durum='Dağıtıldı' WHERE id=?", (gerceklesen, uretim_id))
+            conn.commit()
+
+        # ❄️ YENİ: DONDURUCU ENTEGRASYONU - İPTAL DURUMU
+        elif islem == 'gun_sonu_iptal':
+            uretim_id = request.form['uretim_id']
+            u = conn.execute("SELECT yemek_adi, ogun, gerceklesen_kisi FROM uretim WHERE id=?", (uretim_id,)).fetchone()
+            
+            if u and u['ogun'] == '❄️ Donmuş Hazırlık':
+                conn.execute("UPDATE dondurucu_stok SET miktar = miktar - ? WHERE urun_adi=? AND tur='Kendi Üretimimiz'", (u['gerceklesen_kisi'], u['yemek_adi']))
+                conn.execute("DELETE FROM dondurucu_stok WHERE miktar <= 0")
+                
+            conn.execute("UPDATE uretim SET gerceklesen_kisi=0, durum='Üretimde' WHERE id=?", (uretim_id,))
+            conn.commit()
+
         elif islem == 'ekstra_kullanim':
             conn.execute("INSERT INTO mutfak_ekstra_kullanim (tarih, ogun, yemek_adi, malzeme_adi, miktar, birim) VALUES (?,?,?,?,?,?)", 
                          (m_tarih, m_ogun, request.form['hedef_yemek'], request.form['malzeme_adi'], float(request.form['miktar']), request.form['birim']))
@@ -883,8 +949,6 @@ def uretim():
             else: conn.execute('INSERT INTO gunluk_istatistik (tarih, ogun, personel_sayisi, ogrenci_sayisi) VALUES (?,?,?,?)', (m_tarih, m_ogun, int(request.form.get('personel_sayisi', 0)), int(request.form.get('ogrenci_sayisi', 0))))
             conn.commit(); flash("✅ Turnike verisi güncellendi, porsiyon analizi yenilendi.", "success")
 
-        elif islem == 'gun_sonu': conn.execute("UPDATE uretim SET gerceklesen_kisi=?, durum='Dağıtıldı' WHERE id=?", (request.form['gerceklesen'], request.form['uretim_id'])); conn.commit()
-        elif islem == 'gun_sonu_iptal': conn.execute("UPDATE uretim SET gerceklesen_kisi=0, durum='Üretimde' WHERE id=?", (request.form['uretim_id'],)); conn.commit()
         elif islem == 'recete_ekle': conn.execute('INSERT INTO receteler (yemek_adi, malzeme_adi, miktar, birim) VALUES (?,?,?,?)', (request.form['yemek_adi'], request.form['malzeme_adi'], float(request.form['miktar_gram']), request.form.get('birim', 'Gr'))); conn.commit()
         elif islem == 'recete_sil': conn.execute('DELETE FROM receteler WHERE id=?', (request.form['recete_id'],)); conn.commit()
         elif islem == 'recete_arsiv_ekle': conn.execute('INSERT INTO receteler (yemek_adi, malzeme_adi, miktar, birim) VALUES (?,?,?,?)', (request.form['yemek_adi'].title(), request.form['malzeme_adi'], float(request.form['miktar_gram']), request.form.get('birim', 'Gr'))); conn.commit(); flash("Reçete arşivi güncellendi.", "success")
@@ -895,7 +959,6 @@ def uretim():
     tarih = request.args.get('tarih', bugun)
     ogun = request.args.get('ogun', 'Öğle Yemeği')
 
-    # GÜVENLİK: İstatistik sayımlarını Null-Check ile yap
     istatistik = conn.execute('SELECT * FROM gunluk_istatistik WHERE tarih=? AND ogun=?', (tarih, ogun)).fetchone()
     toplam_gelen = 0
     if istatistik:
@@ -909,7 +972,6 @@ def uretim():
     for u in conn.execute(query, params).fetchall():
         u_dict = dict(u); m_list = []
         
-        # GÜVENLİK: Null-Check
         p_kisi = u['planlanan_kisi'] if u['planlanan_kisi'] else 0
         d_alinan = u['dondurucudan_alinan'] if u['dondurucudan_alinan'] else 0
         sifirdan_kisi = max(0, p_kisi - d_alinan)
@@ -934,7 +996,6 @@ def uretim():
     yedek_dict = {y['yemek_adi']: y['porsiyon'] for y in yedek_stok_db}
     depo_malz = conn.execute('SELECT urun_adi FROM depo ORDER BY urun_adi').fetchall()
     
-    # GÜVENLİK: Null-Check
     icecek_stok = conn.execute("SELECT miktar FROM depo WHERE urun_adi='Ayran / Meyve Suyu'").fetchone()
     icecek_miktar = 0
     if icecek_stok and icecek_stok['miktar'] is not None:
@@ -945,7 +1006,6 @@ def uretim():
         
     mevcut_yemekler = conn.execute('SELECT DISTINCT yemek_adi FROM receteler ORDER BY yemek_adi').fetchall()
 
-    # --- ANLIK MUTFAK DEPOSU HESAPLAMA MOTORU ---
     istisnalar = ('Zayi/Fire', 'Personel İkram', 'Genel Tüketim', 'Kumanya')
 
     if ogun and ogun != 'Tümü':
@@ -961,7 +1021,6 @@ def uretim():
 
     tuketim = {}
     for u in aktif_uretimler:
-        # GÜVENLİK: Null-Check
         p_kisi = u['planlanan_kisi'] if u['planlanan_kisi'] else 0
         d_alinan = u['dondurucudan_alinan'] if u['dondurucudan_alinan'] else 0
         kisi = max(0, p_kisi - d_alinan)
@@ -980,7 +1039,6 @@ def uretim():
         kalan = m['toplam_cikan'] - tuketim.get(malz, 0) - ekstra_dict.get(malz, 0)
         if kalan > 0.05: mutfak_deposu.append({'malzeme_adi': malz, 'mutfak_miktar': kalan, 'birim': m['birim']})
             
-    # --- PORSİYON VE VARYANS ANALİZİ MOTORU ---
     porsiyon_analizleri = []
     for u in aktif_uretimler:
         receteler = conn.execute("SELECT malzeme_adi, miktar FROM receteler WHERE yemek_adi=?", (u['yemek_adi'],)).fetchall()
@@ -1008,7 +1066,6 @@ def uretim():
             if net_pisen > 0 and birim.upper() in ['KG', 'LT']:
                 porsiyon_analizleri.append({'yemek_adi': u['yemek_adi'], 'malzeme': malz, 'recete_gr': r['miktar'], 'cikan': cikan, 'iade': iade, 'ekstra': ekstra, 'net': net_pisen, 'porsiyon': teorik_porsiyon, 'turnike': toplam_gelen, 'fark': fark, 'birim': birim})
 
-    # ARŞİV
     receteler_ham = conn.execute("SELECT id, yemek_adi, malzeme_adi, miktar, birim FROM receteler ORDER BY yemek_adi ASC").fetchall()
     recete_arsivi = {}
     for r in receteler_ham:
