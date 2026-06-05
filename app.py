@@ -804,64 +804,7 @@ def depo():
             else:
                 flash(f"Hata: Depoda yeterli miktar bulunmuyor!", "error")
 
-        elif islem == 'toplu_recete_cikisi':
-            hedef_uretim_val = request.form['toplu_uretim']
-            porsiyon = int(request.form['porsiyon'])
-            
-            if not hedef_uretim_val or porsiyon <= 0:
-                flash("Lütfen hedef üretimi seçip geçerli bir porsiyon girin!", "error")
-                return redirect(url_for('depo'))
-                
-            parcalar = hedef_uretim_val.split('|')
-            islem_tarihi = parcalar[0].strip()
-            ogun_secimi = parcalar[1].strip()
-            hedef_yemek = parcalar[2].strip()
-            
-            recete = conn.execute("SELECT * FROM receteler WHERE yemek_adi=?", (hedef_yemek,)).fetchall()
-            
-            if not recete:
-                flash(f"Hata: '{hedef_yemek}' için kayıtlı bir reçete (malzeme listesi) bulunamadı!", "error")
-                return redirect(url_for('depo'))
-
-            yetersiz_stoklar = []
-            basarili_cikislar = []
-
-            for r in recete:
-                d_m = conn.execute("SELECT id, miktar, birim FROM depo WHERE urun_adi COLLATE NOCASE = ?", (r['malzeme_adi'],)).fetchone()
-                oran = 1000 if d_m and d_m['birim'].upper() in ['KG', 'LT'] else 1
-                gereken = (r['miktar'] * porsiyon) / oran
-                
-                if d_m and d_m['miktar'] >= gereken:
-                    conn.execute("UPDATE depo SET miktar = miktar - ? WHERE id=?", (gereken, d_m['id']))
-                    lots = conn.execute("SELECT id, kalan_miktar, marka FROM stok_lotlari WHERE urun_adi COLLATE NOCASE=? AND kalan_miktar > 0 ORDER BY tarih ASC", (r['malzeme_adi'],)).fetchall()
-                    kalan_dusulecek = gereken
-                    kullanilan_marka = "Karışık Lot" if len(lots) > 1 else (lots[0]['marka'] if lots else 'Sistem/Eski Stok')
-                    
-                    for lot in lots:
-                        if kalan_dusulecek <= 0: break
-                        if lot['kalan_miktar'] <= kalan_dusulecek:
-                            kalan_dusulecek -= lot['kalan_miktar']
-                            conn.execute("UPDATE stok_lotlari SET kalan_miktar=0 WHERE id=?", (lot['id'],))
-                        else:
-                            conn.execute("UPDATE stok_lotlari SET kalan_miktar=kalan_miktar-? WHERE id=?", (kalan_dusulecek, lot['id']))
-                            kalan_dusulecek = 0
-                            
-                    aciklama = f"Toplu Reçete Çıkışı ({porsiyon} Porsiyon) | İşlem: {session['isim']}"
-                    conn.execute("INSERT INTO depo_cikis (tarih, ogun, yemek_adi, malzeme_adi, marka, miktar, birim, onay_durumu, aciklama) VALUES (?,?,?,?,?,?,?,'Onaylandı',?)",
-                                 (islem_tarihi, ogun_secimi, hedef_yemek, r['malzeme_adi'], kullanilan_marka, gereken, d_m['birim'], aciklama))
-                    
-                    basarili_cikislar.append(f"{r['malzeme_adi']} ({gereken} {d_m['birim']})")
-                else:
-                    mevcut_miktar = d_m['miktar'] if d_m else 0
-                    birim_str = d_m['birim'] if d_m else 'Birim'
-                    yetersiz_stoklar.append(f"{r['malzeme_adi']} (Gereken: {gereken} {birim_str}, Mevcut: {mevcut_miktar} {birim_str})")
-
-            conn.commit()
-            if yetersiz_stoklar:
-                flash(f"Kısmi Çıkış Yapıldı! Şu ürünlerin stoğu yetersiz olduğu için çıkılamadı: {', '.join(yetersiz_stoklar)}", "error")
-            elif basarili_cikislar:
-                flash(f"✅ '{hedef_yemek}' ({porsiyon} Kişi) için tüm reçete malzemeleri depodan mutfağa sevk edildi!", "success")
-
+        
         elif islem == 'cikis_onayla' and session.get('rol') == 'admin':
             cikis = conn.execute("SELECT * FROM depo_cikis WHERE id=?", (request.form['cikis_id'],)).fetchone()
             if cikis and cikis['onay_durumu'] == 'Bekliyor':

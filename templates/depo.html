@@ -37,37 +37,8 @@
           {% endif %}
         {% endwith %}
 
-        <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-10 w-full max-w-7xl mx-auto">
+        <div class="grid grid-cols-1 xl:grid-cols-1 gap-8 mb-10 w-full max-w-7xl mx-auto">
             
-            <div class="bg-white p-8 rounded-[2rem] shadow-sm border border-emerald-100 border-l-8 border-l-emerald-500 relative z-30">
-                <h3 class="text-lg font-black text-gray-800 mb-2 flex items-center gap-2">🍲 Reçeteye Göre Toplu Çıkış</h3>
-                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-6 border-b border-gray-100 pb-4">Seçilen yemeğin reçetesini okur ve tüm malzemeleri tek seferde depodan düşer.</p>
-                
-                <form action="/depo" method="POST" class="space-y-4" onsubmit="return confirm('Seçilen yemeğin TÜM reçete malzemeleri depodan düşülecek. Onaylıyor musunuz?');">
-                    <input type="hidden" name="islem_tipi" value="toplu_recete_cikisi">
-                    
-                    <div>
-                        <label class="block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2 flex items-center gap-2">
-                            <span>🎯</span> Hangi Yemek Yapılacak?
-                        </label>
-                        <select name="toplu_uretim" required class="w-full border-2 border-emerald-100 p-4 rounded-xl font-black outline-none bg-emerald-50/50 focus:border-emerald-500 text-sm text-emerald-900 shadow-inner transition cursor-pointer">
-                            <option value="">Planlanmış Menüden Bir Yemek Seçin...</option>
-                            {% for u in planlananlar %}
-                                <option value="{{ u.tarih }}|{{ u.ogun }}|{{ u.yemek_adi }}">📅 [{{ u.tarih[-5:] }}] {{ u.ogun[:4] }}. - {{ u.yemek_adi }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">Kaç Kişilik (Porsiyon) Hazırlanacak?</label>
-                        <input type="number" name="porsiyon" required placeholder="Örn: 1000" class="w-full border-2 border-emerald-100 p-4 rounded-xl font-black outline-none bg-emerald-50/50 focus:border-emerald-500 text-lg text-emerald-900 shadow-inner text-center transition">
-                    </div>
-
-                    <button type="submit" class="w-full bg-emerald-600 text-white font-black py-4 rounded-xl hover:bg-emerald-700 transition shadow-sm text-xs uppercase tracking-widest mt-2">
-                        {% if session.rol == 'admin' %} Reçetedeki Tüm Ürünleri Çıkar {% else %} Reçete Çıkış Talebi Gönder {% endif %}
-                    </button>
-                </form>
-            </div>
 
             <div class="bg-white p-8 rounded-[2rem] shadow-sm border border-indigo-100 border-l-8 border-l-indigo-500 relative z-40">
                 <h3 class="text-lg font-black text-gray-800 mb-2 flex items-center gap-2">📤 Tekil / Manuel Mal Çıkışı</h3>
