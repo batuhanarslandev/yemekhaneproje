@@ -631,6 +631,131 @@ def depo():
             if urun_id:
                 conn.execute("DELETE FROM depo WHERE id=?", (urun_id,))
                 flash("Ürün ve stok bilgisi depodan tamamen silindi.", "success")
+# 👑 YENİ: EXCEL'DEN TOPLU STOK YÜKLEME VE TEMİZLİK
+        elif islem == 'excel_yukle' and session.get('rol') == 'admin':
+            file = request.files.get('excel_file')
+            temizle = request.form.get('stok_temizle')
+            
+            if file and file.filename.endswith(('.xls', '.xlsx')):
+                try:
+                    # 1. Aşama: İsteniyorsa Et ve Donmuş Hazır Yemek Hariç Her Şeyi Sil
+                    if temizle == 'evet':
+                        silinecekler = conn.execute("SELECT urun_adi FROM depo WHERE kategori NOT LIKE '%Et%' AND kategori NOT LIKE '%Donmuş Hazır Yemek%'").fetchall()
+                        for u in silinecekler:
+                            conn.execute("DELETE FROM stok_lotlari WHERE urun_adi COLLATE NOCASE = ?", (u['urun_adi'],))
+                            conn.execute("DELETE FROM depo WHERE urun_adi COLLATE NOCASE = ?", (u['urun_adi'],))
+                    
+                    # 2. Aşama: Excel'i Oku ve Yükle
+                    df = pd.read_excel(file)
+                    basarili = 0
+                    
+                    for index, row in df.iterrows():
+                        urun_adi = str(row.iloc[0]).strip().title()
+                        try: miktar = float(row.iloc[1])
+                        except: miktar = 0.0
+                        birim = str(row.iloc[2]).strip().upper()
+                        
+                        if not urun_adi or urun_adi == 'Nan' or miktar <= 0: continue
+                            
+                        # Depoya Ekle
+                        mevcut = conn.execute("SELECT id FROM depo WHERE urun_adi COLLATE NOCASE = ?", (urun_adi,)).fetchone()
+                        if mevcut:
+                            conn.execute("UPDATE depo SET miktar = miktar + ? WHERE id = ?", (miktar, mevcut['id']))
+                        else:
+                            conn.execute("INSERT INTO depo (kategori, urun_adi, miktar, birim) VALUES (?,?,?,?)", ("Genel Depo", urun_adi, miktar, birim))
+                        
+                        # Hareket (Lot) Geçmişine Ekle
+                        conn.execute("INSERT INTO stok_lotlari (urun_adi, marka, baslangic_miktar, kalan_miktar, birim, lot_damga_no) VALUES (?,?,?,?,?,?)",
+                                     (urun_adi, "Excel Aktarımı", miktar, miktar, birim, "EXCEL-YENİ"))
+                        basarili += 1
+                    
+                    conn.commit()
+                    flash(f"✅ {basarili} kalem ürün Excel'den başarıyla depoya aktarıldı.", "success")
+                except Exception as e:
+                    flash(f"Hata oluştu: Lütfen Excel tablonuzun (A:Ürün, B:Miktar, C:Birim) düzeninde olduğundan emin olun.", "error")
+            else:
+                flash("Lütfen geçerli bir Excel dosyası (.xlsx veya .xls) yükleyin.", "error")
+        # 👑 YENİ: EXCEL İLE TOPLU MALZEME ÇIKIŞI YAPMA (D Sütunu Hedef Yemekli)
+        elif islem == 'excel_toplu_cikis':
+            bagli_uretim = request.form.get('bagli_uretim')
+            file = request.files.get('excel_file')
+            
+            if not bagli_uretim:
+                flash("Lütfen referans bir öğün veya hedef seçin!", "error")
+                return redirect(url_for('depo'))
+                
+            parcalar = bagli_uretim.split('|')
+            islem_tarihi = parcalar[0].strip()
+            ogun_secimi = parcalar[1].strip()
+            hedef_yemek = parcalar[2].strip() # Bu varsayılan yemek olacak
+            
+            if file and file.filename.endswith(('.xls', '.xlsx')):
+                try:
+                    df = pd.read_excel(file)
+                    basarili = []
+                    hatalar = []
+                    
+                    for index, row in df.iterrows():
+                        urun_adi = str(row.iloc[0]).strip().title()
+                        try: miktar = float(row.iloc[1])
+                        except: continue # Miktar sayı değilse bu satırı atla
+                        
+                        if not urun_adi or urun_adi.lower() == 'nan' or miktar <= 0: continue
+
+                        # 👑 YENİ Zeka: Eğer D sütunu (index 3) doluysa hedef yemeği o yap!
+                        satir_yemek = hedef_yemek
+                        if len(row) > 3:
+                            d_val = str(row.iloc[3]).strip()
+                            if d_val and d_val.lower() != 'nan':
+                                satir_yemek = d_val.title()
+                        
+                        # Ürünü depoda bul
+                        mevcut = conn.execute("SELECT id, miktar, birim FROM depo WHERE urun_adi COLLATE NOCASE = ?", (urun_adi,)).fetchone()
+                        
+                        if mevcut and mevcut['miktar'] >= miktar:
+                            # İşlem geçmişinde yemeğin adını da gösterelim
+                            log_aciklamasi = f"Excel Çıkışı -> {satir_yemek} | İşlem: {session['isim']}"
+                            
+                            # Rol depocu ise sadece talep oluşturur
+                            if session.get('rol') == 'depocu':
+                                conn.execute("INSERT INTO depo_cikis (tarih, ogun, yemek_adi, malzeme_adi, marka, miktar, birim, onay_durumu, aciklama) VALUES (?,?,?,?,?,?,?,'Bekliyor',?)",
+                                             (islem_tarihi, ogun_secimi, satir_yemek, urun_adi, '', miktar, mevcut['birim'], log_aciklamasi))
+                                basarili.append(urun_adi)
+                            # Rol admin ise direkt düşer
+                            else:
+                                conn.execute("UPDATE depo SET miktar = miktar - ? WHERE id=?", (miktar, mevcut['id']))
+                                
+                                # FIFO mantığı ile lotlardan düş
+                                lots = conn.execute("SELECT id, kalan_miktar, marka FROM stok_lotlari WHERE urun_adi COLLATE NOCASE=? AND kalan_miktar > 0 ORDER BY tarih ASC", (urun_adi,)).fetchall()
+                                kalan_dusulecek = miktar
+                                kullanilan_marka = "Karışık Lot" if len(lots) > 1 else (lots[0]['marka'] if lots else 'Sistem/Eski Stok')
+                                
+                                for lot in lots:
+                                    if kalan_dusulecek <= 0: break
+                                    if lot['kalan_miktar'] <= kalan_dusulecek:
+                                        kalan_dusulecek -= lot['kalan_miktar']
+                                        conn.execute("UPDATE stok_lotlari SET kalan_miktar=0 WHERE id=?", (lot['id'],))
+                                    else:
+                                        conn.execute("UPDATE stok_lotlari SET kalan_miktar=kalan_miktar-? WHERE id=?", (kalan_dusulecek, lot['id']))
+                                        kalan_dusulecek = 0
+                                
+                                conn.execute("INSERT INTO depo_cikis (tarih, ogun, yemek_adi, malzeme_adi, marka, miktar, birim, onay_durumu, aciklama) VALUES (?,?,?,?,?,?,?,'Onaylandı',?)",
+                                             (islem_tarihi, ogun_secimi, satir_yemek, urun_adi, kullanilan_marka, miktar, mevcut['birim'], log_aciklamasi))
+                                basarili.append(urun_adi)
+                        else:
+                            # Stokta yok veya miktar yetersiz
+                            mevcut_miktar = mevcut['miktar'] if mevcut else 0
+                            hatalar.append(f"{urun_adi} (İstenen: {miktar}, Mevcut: {mevcut_miktar})")
+                            
+                    conn.commit()
+                    if hatalar:
+                        flash(f"Kısmi Çıkış Yapıldı! Şu ürünlerin stoğu yetersiz olduğu için çıkılamadı: {', '.join(hatalar)}", "error")
+                    if basarili:
+                        flash(f"✅ {len(basarili)} kalem ürün Excel'den okunarak {'onaya gönderildi' if session.get('rol') == 'depocu' else 'başarıyla mutfağa (özel yemeklere) sevk edildi'}.", "success")
+                except Exception as e:
+                    flash("Excel dosyası okunurken hata oluştu! Lütfen sütun diziliminizi kontrol edin.", "error")
+            else:
+                flash("Lütfen geçerli bir Excel dosyası (.xlsx veya .xls) seçin.", "error")
 
         elif islem == 'depo_cikis':
             urun_marka_val = request.form['urun_adi_marka']
@@ -786,26 +911,37 @@ def depo():
         conn.commit()
         return redirect(url_for('depo'))
 
-    stoklar = conn.execute('SELECT * FROM depo ORDER BY kategori, urun_adi').fetchall()
+    stoklar_raw = conn.execute('SELECT * FROM depo ORDER BY kategori, urun_adi').fetchall()
     
     # ❄️ YENİ: DONDURUCU STOKLARINI ÇEK
     dondurucu_stoklar = conn.execute("SELECT * FROM dondurucu_stok ORDER BY islem_tarihi DESC").fetchall()
 
     detayli_stoklar = []
-    for s in stoklar:
-        lots = conn.execute("SELECT marka, SUM(kalan_miktar) as miktar FROM stok_lotlari WHERE urun_adi COLLATE NOCASE=? AND kalan_miktar > 0 GROUP BY marka", (s['urun_adi'],)).fetchall()
+    stoklar = [] # HTML'in çökmesini engelleyen güvenli liste
+    
+    import math
+    for s in stoklar_raw:
+        s_dict = dict(s)
+        # Miktar boşsa veya NaN (Tanımsız) ise sistemi çökertmemesi için 0 yap
+        if s_dict['miktar'] is None or math.isnan(float(s_dict['miktar'] if s_dict['miktar'] else 0)):
+            s_dict['miktar'] = 0.0
+            
+        stoklar.append(s_dict)
+
+        lots = conn.execute("SELECT marka, SUM(kalan_miktar) as miktar FROM stok_lotlari WHERE urun_adi COLLATE NOCASE=? AND kalan_miktar > 0 GROUP BY marka", (s_dict['urun_adi'],)).fetchall()
         lot_total = 0
         for l in lots:
+            l_miktar = l['miktar'] if l['miktar'] is not None else 0.0
             detayli_stoklar.append({
-                'urun_adi': s['urun_adi'], 'marka': l['marka'] if l['marka'] else 'Markasız',
-                'miktar': l['miktar'], 'birim': s['birim'], 'gercek_marka': l['marka']
+                'urun_adi': s_dict['urun_adi'], 'marka': l['marka'] if l['marka'] else 'Markasız',
+                'miktar': l_miktar, 'birim': s_dict['birim'], 'gercek_marka': l['marka']
             })
-            lot_total += l['miktar']
+            lot_total += l_miktar
 
-        if s['miktar'] > lot_total + 0.05:
+        if s_dict['miktar'] > lot_total + 0.05:
             detayli_stoklar.append({
-                'urun_adi': s['urun_adi'], 'marka': 'Sistem/Eski Stok',
-                'miktar': s['miktar'] - lot_total, 'birim': s['birim'], 'gercek_marka': 'Sistem/Eski Stok'
+                'urun_adi': s_dict['urun_adi'], 'marka': 'Sistem/Eski Stok',
+                'miktar': s_dict['miktar'] - lot_total, 'birim': s_dict['birim'], 'gercek_marka': 'Sistem/Eski Stok'
             })
 
     bekleyen_cikislar = conn.execute("SELECT * FROM depo_cikis WHERE onay_durumu='Bekliyor' ORDER BY id DESC").fetchall()
