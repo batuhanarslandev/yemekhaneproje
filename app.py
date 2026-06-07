@@ -638,9 +638,19 @@ def depo():
             
             if file and file.filename.endswith(('.xls', '.xlsx')):
                 try:
-                    # 1. Aşama: İsteniyorsa Et ve Donmuş Hazır Yemek Hariç Her Şeyi Sil
+                    # 1. Aşama: ZIRHLI TEMİZLİK (Kategorisi bozulanları da siler, sadece GERÇEK etleri korur)
                     if temizle == 'evet':
-                        silinecekler = conn.execute("SELECT urun_adi FROM depo WHERE kategori NOT LIKE '%Et%' AND kategori NOT LIKE '%Donmuş Hazır Yemek%'").fetchall()
+                        silinecekler = conn.execute("""
+                            SELECT urun_adi FROM depo 
+                            WHERE urun_adi NOT LIKE '%Karkas%' 
+                            AND urun_adi NOT LIKE '%Kıyma%' 
+                            AND urun_adi NOT LIKE '%Kuşbaşı%' 
+                            AND urun_adi NOT LIKE '%Kemik%'
+                            AND urun_adi NOT LIKE '%Tavuk%'
+                            AND urun_adi NOT LIKE '%Piliç%'
+                            AND kategori NOT LIKE '%Donmuş Hazır Yemek%'
+                        """).fetchall()
+                        
                         for u in silinecekler:
                             conn.execute("DELETE FROM stok_lotlari WHERE urun_adi COLLATE NOCASE = ?", (u['urun_adi'],))
                             conn.execute("DELETE FROM depo WHERE urun_adi COLLATE NOCASE = ?", (u['urun_adi'],))
@@ -853,6 +863,17 @@ def depo():
 
         conn.commit()
         return redirect(url_for('depo'))
+
+    # 🥩 YENİ: ET STOKLARINI OTOMATİK SENKRONİZE ET (Oto-Tamir)
+    try:
+        et_urunleri = conn.execute("SELECT urun_adi FROM depo WHERE kategori LIKE '%Kırmızı Et%'").fetchall()
+        for et in et_urunleri:
+            g_mik_row = conn.execute("SELECT SUM(kalan_miktar) as m FROM stok_lotlari WHERE urun_adi COLLATE NOCASE = ? AND kalan_miktar > 0", (et['urun_adi'],)).fetchone()
+            g_mik = g_mik_row['m'] if g_mik_row and g_mik_row['m'] else 0.0
+            conn.execute("UPDATE depo SET miktar = ? WHERE urun_adi COLLATE NOCASE = ?", (g_mik, et['urun_adi']))
+        conn.commit()
+    except:
+        pass
 
     stoklar_raw = conn.execute('SELECT * FROM depo ORDER BY kategori, urun_adi').fetchall()
     
@@ -1521,6 +1542,10 @@ def et_isleme():
                 mevcut = conn.execute('SELECT id FROM depo WHERE urun_adi COLLATE NOCASE = ?', (urun,)).fetchone()
                 if mevcut: conn.execute('UPDATE depo SET miktar = miktar + ? WHERE id=?', (mik, mevcut['id']))
                 else: conn.execute('INSERT INTO depo (kategori, urun_adi, miktar, birim) VALUES (?,?,?,?)', (kategori, urun, mik, 'KG'))
+                
+                # 👑 YENİ: Çıkan etlerin kimliğini (Lot) oluştur ki Oto-Tamir onları kaçak sanıp silmesin!
+                conn.execute("INSERT INTO stok_lotlari (urun_adi, marka, lot_damga_no, baslangic_miktar, kalan_miktar, birim) VALUES (?, ?, ?, ?, ?, ?)",
+                             (urun, 'Kendi Üretimimiz', damga_no, mik, mik, 'KG'))
 
         if fire > 0:
             conn.execute('INSERT INTO fire_kayitlari (kategori, urun_adi, miktar, birim, kullanici, aciklama) VALUES (?, ?, ?, ?, ?, ?)',
@@ -1540,6 +1565,7 @@ def et_isleme():
         FROM stok_lotlari sl
         JOIN depo d ON sl.urun_adi = d.urun_adi
         WHERE d.kategori IN ('Kırmızı Et', '🥩 Kırmızı Et') AND sl.kalan_miktar > 0
+        AND sl.urun_adi NOT LIKE '%Kıyma%' AND sl.urun_adi NOT LIKE '%Kuşbaşı%' AND sl.urun_adi NOT LIKE '%Kemik%'
         ORDER BY sl.tarih ASC
     """).fetchall()
 
@@ -1556,6 +1582,7 @@ def et_isleme():
         SELECT sl.* FROM stok_lotlari sl
         JOIN depo d ON sl.urun_adi = d.urun_adi
         WHERE d.kategori IN ('Kırmızı Et', '🥩 Kırmızı Et')
+        AND sl.urun_adi NOT LIKE '%Kıyma%' AND sl.urun_adi NOT LIKE '%Kuşbaşı%' AND sl.urun_adi NOT LIKE '%Kemik%'
         ORDER BY sl.id DESC LIMIT 5
     """).fetchall()
 
@@ -2221,6 +2248,7 @@ def et_arsivi_api(offset):
         SELECT sl.* FROM stok_lotlari sl
         JOIN depo d ON sl.urun_adi = d.urun_adi
         WHERE d.kategori IN ('Kırmızı Et', '🥩 Kırmızı Et')
+        AND sl.urun_adi NOT LIKE '%Kıyma%' AND sl.urun_adi NOT LIKE '%Kuşbaşı%' AND sl.urun_adi NOT LIKE '%Kemik%'
         ORDER BY sl.id DESC LIMIT 5 OFFSET ?
     """, (offset,)).fetchall()
 
