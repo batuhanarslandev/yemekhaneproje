@@ -11,6 +11,17 @@
         .modal-active { overflow: hidden; }
         .accordion-content { transition: max-height 0.3s ease-out, opacity 0.3s ease-out; max-height: 0; opacity: 0; overflow: hidden; }
         .accordion-content.open { max-height: 500px; opacity: 1; }
+        
+        /* Makbuz Kesikli Çizgi Deseni */
+        .receipt-line { border-top: 2px dashed #e2e8f0; margin: 12px 0; }
+        
+        /* Döküm (Yazdır) Modu İçin */
+        @media print {
+            body * { visibility: hidden; }
+            #receiptModalBox, #receiptModalBox * { visibility: visible; }
+            #receiptModalBox { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none; border: none; }
+            .no-print { display: none !important; }
+        }
     </style>
 </head>
 <body class="bg-gray-50 flex min-h-screen font-sans text-slate-800">
@@ -92,17 +103,11 @@
         <div class="bg-gray-900 rounded-[2.5rem] shadow-xl border border-gray-800 overflow-hidden mb-10">
             <div class="p-8 border-b border-gray-800 flex justify-between items-center">
                 <h3 class="text-white font-black uppercase tracking-widest text-xs flex items-center gap-2">
-                    <span class="text-xl">📊</span> Son 5 Karkas Sevkiyatı & Kümülatif Verim Analizi
+                    <span class="text-xl">📊</span> Son Karkas Sevkiyatları & Kümülatif Verim Analizi
                 </h3>
             </div>
-            <div id="ekstra-lotlar-alani" class="grid gap-3 px-6 pb-2"></div>
             
-            <div class="p-6 text-center border-t border-gray-800">
-                <button onclick="dahaFazlaLotYukle()" id="btnLotYukle" class="bg-gray-800 text-gray-400 px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-700 hover:text-white transition w-full md:w-auto border border-gray-700">
-                    Daha Eski Sevkiyatları Gör ⬇️
-                </button>
-            </div>
-            <div class="p-6 grid gap-3">
+            <div class="p-6 grid gap-3" id="ekstra-lotlar-alani">
                 {% for karne in lot_karneleri %}
                 <div class="flex flex-col">
                     <div class="bg-gray-800/50 rounded-2xl p-5 border border-gray-700/50 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-gray-800 transition cursor-pointer z-10" onclick="toggleAccordion({{ karne.id }})">
@@ -127,13 +132,17 @@
                             </div>
                         </div>
 
-                        <div class="w-full md:w-1/3 flex justify-end items-center gap-4">
+                        <div class="w-full md:w-1/3 flex justify-end items-center gap-3">
                             {% if karne.islenen > 0 %}
                                 <div class="text-right hidden md:block">
                                     <span class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1">Fire Oranı</span>
                                     <span class="font-black {% if karne.fire_oran > 25 %}text-red-500{% elif karne.fire_oran > 15 %}text-orange-500{% else %}text-emerald-500{% endif %}">%{{ karne.fire_oran }}</span>
                                 </div>
                             {% endif %}
+                            
+                            <button onclick="event.stopPropagation(); openReceiptModal('{{ karne.urun }} [No: {{ karne.damga }}]', '{{ karne.islenen }}', '{{ karne.get('kullanilan_alan', 'Kümülatif Üretim') }}', 'Kıyma: {{ karne.kiyma }} | Kuşbaşı: {{ karne.kusbasi }} | Kemikli: {{ karne.kemikli }} | Kemik: {{ karne.kemik }} | Fire: {{ karne.fire }}', '{{ karne.tarih }}')" class="bg-gray-800 border border-gray-600 text-white px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-700 hover:text-indigo-300 transition shadow-sm ml-2">
+                                Özet Fiş 🧾
+                            </button>
                             <button class="bg-gray-700 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-600 transition shadow-sm" id="btn-{{ karne.id }}">Detayı Gör ⬇️</button>
                         </div>
                     </div>
@@ -173,12 +182,18 @@
                 <div class="text-gray-500 text-sm font-bold text-center py-4">Henüz işlenmiş bir sevkiyat kaydı bulunmuyor.</div>
                 {% endfor %}
             </div>
+
+            <div class="p-6 text-center border-t border-gray-800 bg-gray-900/50">
+                <button onclick="dahaFazlaLotYukle()" id="btnLotYukle" class="bg-gray-800 text-gray-400 px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-700 hover:text-white transition w-full md:w-auto border border-gray-700">
+                    Daha Eski Sevkiyatları Gör ⬇️
+                </button>
+            </div>
         </div>
 
         <div class="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
             <div class="p-8 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
                 <h3 class="text-gray-800 font-black uppercase tracking-widest text-xs flex items-center gap-2">
-                    <span class="text-lg">📜</span> Son 5 Parçalama Aksiyonu (Anlık Log)
+                    <span class="text-lg">📜</span> Son Parçalama Aksiyonları (Anlık Log)
                 </h3>
             </div>
             
@@ -190,7 +205,7 @@
                             <th class="px-8 py-5">İşlenen Kaynak (Damga)</th>
                             <th class="px-8 py-5 text-center">Giren Miktar</th>
                             <th class="px-8 py-5">Anlık Çıkan Ürün Detayları</th>
-                        </tr>
+                            <th class="px-8 py-5 text-right">Aksiyon</th> </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-50">
                         {% for log in gecmis_islemler %}
@@ -202,7 +217,7 @@
                             <td class="px-8 py-5">
                                 <span class="font-black text-gray-700 block text-sm">{{ log.kaynak }}</span>
                                 {% if log.get('kullanilan_alan') and log.get('kullanilan_alan') != '-' %}
-                                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mt-1">Kullanım Amacı: <b class="text-indigo-600 bg-indigo-50/60 px-1.5 py-0.5 rounded">{{ log.get('kullanilan_alan') }}</b></span>
+                                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mt-1">Kullanım: <b class="text-indigo-600 bg-indigo-50/60 px-1.5 py-0.5 rounded">{{ log.get('kullanilan_alan') }}</b></span>
                                 {% endif %}
                             </td>
                             <td class="px-8 py-5 text-center">
@@ -220,6 +235,11 @@
                                     {% endfor %}
                                 </div>
                             </td>
+                            <td class="px-8 py-5 text-right">
+                                <button onclick="openReceiptModal('{{ log.kaynak }}', '{{ log.harcanan }}', '{{ log.get('kullanilan_alan', 'Genel Üretim') }}', '{{ log.detay }}', '{{ log.tarih }}')" class="bg-white border border-gray-200 hover:bg-rose-50 hover:text-rose-600 px-3 py-1.5 rounded-xl text-[10px] font-black transition shadow-sm uppercase tracking-widest">
+                                    Fişi Gör 🧾
+                                </button>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -230,7 +250,6 @@
 
     <div id="etModal" class="hidden fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center z-50 p-4 transition-all duration-300 opacity-0">
         <div class="bg-white rounded-[3rem] shadow-2xl w-full max-w-5xl overflow-hidden transform scale-95 transition-all duration-300" id="etModalBox">
-            
             <div class="bg-gray-800 p-6 flex justify-between items-center">
                 <div class="flex items-center gap-3">
                     <span class="text-2xl">🥩</span>
@@ -241,7 +260,6 @@
             
             <form action="/et-isleme" method="POST" class="p-10 space-y-8">
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
-                    
                     <div class="space-y-6 lg:col-span-5">
                         <div class="flex items-center gap-2 mb-2">
                             <span class="w-6 h-6 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center text-xs font-black">1</span>
@@ -315,7 +333,104 @@
         </div>
     </div>
 
+    <div id="receiptModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-opacity duration-300 opacity-0">
+        <div class="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden transform scale-95 transition-transform duration-300 border border-slate-100" id="receiptModalBox">
+            
+            <div class="bg-gray-800 p-4 text-center relative no-print">
+                <h4 class="text-white font-black uppercase tracking-widest text-xs">YILDIZ TEKNİK ÜNİVERSİTESİ</h4>
+                <p class="text-[9px] font-bold text-gray-400 mt-0.5">Sağlık, Kültür ve Spor Daire Başkanlığı</p>
+                <button onclick="closeReceiptModal()" class="absolute right-4 top-3 text-gray-400 hover:text-white text-xl transition focus:outline-none">&times;</button>
+            </div>
+            
+            <div class="p-6 bg-white font-mono text-xs text-gray-800 relative">
+                <div class="hidden print-only text-center mb-6 pb-4 border-b border-gray-200">
+                    <h4 class="font-black text-sm uppercase">YILDIZ TEKNİK ÜNİVERSİTESİ</h4>
+                    <p class="text-[10px] text-gray-500">Et İşleme ve Karkas Parçalama Merkezi Makbuzu</p>
+                </div>
+
+                <div class="text-center mb-4">
+                    <span class="text-lg font-black text-gray-900 block tracking-tight">PARÇALAMA FİŞİ</span>
+                    <span id="rcpTarih" class="text-[10px] text-gray-500 font-sans font-bold block mt-1">00.00.0000 - 00:00</span>
+                </div>
+
+                <div class="receipt-line"></div>
+
+                <div class="space-y-2 font-sans">
+                    <div class="flex justify-between"><span class="text-gray-500 font-bold">Kaynak Ham Madde:</span><span id="rcpKaynak" class="font-black text-gray-900 truncate max-w-[150px] text-right">Dana Karkas</span></div>
+                    <div class="flex justify-between"><span class="text-gray-500 font-bold">İşleme Alınan:</span><span id="rcpHarcanan" class="font-black text-gray-900 bg-gray-100 px-2 py-0.5 rounded">0.00 KG</span></div>
+                    <div class="flex justify-between"><span class="text-gray-500 font-bold">Kullanım Amacı:</span><span id="rcpAlan" class="font-bold text-indigo-600 max-w-[180px] truncate text-right">Mutfak</span></div>
+                </div>
+
+                <div class="receipt-line"></div>
+
+                <div class="text-[10px] font-sans uppercase font-black text-gray-400 tracking-widest mb-2">Çıkan Ürünler Dağılım Listesi</div>
+                
+                <div id="rcpBreakdownContainer" class="space-y-1.5 font-mono">
+                    </div>
+
+                <div class="receipt-line"></div>
+
+                <div class="text-center font-sans text-[10px] text-gray-500 font-bold mt-4">
+                    Dietisyen & Depo Kontrol Onaylıdır.<br>
+                    Mutfak ERP Entegrasyon Çıktısı.
+                </div>
+            </div>
+            
+            <div class="p-4 bg-gray-50 border-t border-gray-100 flex gap-2 no-print">
+                <button onclick="window.print()" class="flex-1 bg-gray-800 hover:bg-gray-900 text-white text-center font-black py-3 rounded-xl text-[11px] uppercase tracking-widest transition shadow-sm">
+                    Yazdır / Fiş Dökümü Al 🖨️
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        // --- 🧾 FİŞ (RECEIPT) MODAL İŞLEMLERİ ---
+        function openReceiptModal(kaynak, harcanan, alan, detayStr, tarih) {
+            document.getElementById('rcpKaynak').innerText = kaynak;
+            document.getElementById('rcpHarcanan').innerText = parseFloat(harcanan).toFixed(2) + ' KG';
+            document.getElementById('rcpAlan').innerText = alan && alan !== '-' ? alan : 'Genel Mutfak Üretimi';
+            document.getElementById('rcpTarih').innerText = tarih;
+
+            const breakdownContainer = document.getElementById('rcpBreakdownContainer');
+            breakdownContainer.innerHTML = ''; 
+
+            const parcalar = detayStr.split('|');
+            parcalar.forEach(p => {
+                const eslesme = p.trim().split(':');
+                if (eslesme.length === 2) {
+                    const urunAdi = eslesme[0].trim();
+                    const miktar = parseFloat(eslesme[1].trim()).toFixed(2);
+                    
+                    if (parseFloat(miktar) > 0) {
+                        let renkSinifi = "text-gray-900 font-black";
+                        if (urunAdi.includes("Fire")) renkSinifi = "text-rose-600 font-black";
+                        
+                        const rowHtml = `
+                            <div class="flex justify-between items-center py-1 border-b border-gray-50 border-dashed">
+                                <span class="text-gray-500 font-sans font-medium">${urunAdi}</span>
+                                <span class="${renkSinifi}">${miktar} KG</span>
+                            </div>
+                        `;
+                        breakdownContainer.innerHTML += rowHtml;
+                    }
+                }
+            });
+
+            const m = document.getElementById('receiptModal');
+            const b = document.getElementById('receiptModalBox');
+            m.classList.remove('hidden');
+            setTimeout(() => { m.classList.add('opacity-100'); b.classList.add('scale-100'); }, 10);
+        }
+
+        function closeReceiptModal() {
+            const m = document.getElementById('receiptModal');
+            const b = document.getElementById('receiptModalBox');
+            m.classList.remove('opacity-100'); b.classList.remove('scale-100');
+            setTimeout(() => { m.classList.add('hidden'); }, 300);
+        }
+
+        // --- AKORDEON İŞLEMLERİ ---
         function toggleAccordion(id) {
             const panel = document.getElementById('panel-' + id);
             const btn = document.getElementById('btn-' + id);
@@ -329,9 +444,12 @@
                 document.querySelectorAll('.accordion-content.open').forEach(p => {
                     p.classList.remove('open');
                     const bId = p.id.replace('panel-', 'btn-');
-                    document.getElementById(bId).innerHTML = "Detayı Gör ⬇️";
-                    document.getElementById(bId).classList.remove('bg-rose-600');
-                    document.getElementById(bId).classList.add('bg-gray-700');
+                    const oldBtn = document.getElementById(bId);
+                    if(oldBtn) {
+                        oldBtn.innerHTML = "Detayı Gör ⬇️";
+                        oldBtn.classList.remove('bg-rose-600');
+                        oldBtn.classList.add('bg-gray-700');
+                    }
                 });
                 
                 panel.classList.add('open');
@@ -341,6 +459,7 @@
             }
         }
 
+        // --- ET İŞLEME FORMU İŞLEMLERİ ---
         function openEtModal() {
             const m = document.getElementById('etModal');
             const b = document.getElementById('etModalBox');
@@ -400,10 +519,13 @@
         document.getElementById('kaynakSecici').addEventListener('change', hesapla);
 
         window.onclick = function(event) {
-            const m = document.getElementById('etModal');
-            if (event.target == m) { closeEtModal(); }
+            const m1 = document.getElementById('etModal');
+            const m2 = document.getElementById('receiptModal');
+            if (event.target == m1) { closeEtModal(); }
+            if (event.target == m2) { closeReceiptModal(); }
         }
         
+        // --- DAHA FAZLA GÖSTER (ARŞİV) İŞLEMLERİ (ALTA EKLENİR) ---
         let lotOffset = 5;
 
         function dahaFazlaLotYukle() {
@@ -415,7 +537,7 @@
                 .then(response => response.json())
                 .then(data => {
                     if(data.length === 0) {
-                        btn.innerHTML = "Başka Kayıt Bulunmuyor";
+                        btn.innerHTML = "Başka Eski Kayıt Bulunmuyor";
                         btn.classList.add('opacity-50', 'cursor-not-allowed');
                         return;
                     }
@@ -423,6 +545,9 @@
                     const container = document.getElementById('ekstra-lotlar-alani');
                     data.forEach(karne => {
                         let fireRenk = karne.fire_oran > 25 ? 'text-red-500' : (karne.fire_oran > 15 ? 'text-orange-500' : 'text-emerald-500');
+                        // Tırnak içindeki veriler için kaçış (escape) uygulandı
+                        let fisDetayStr = `Kıyma: ${karne.kiyma} | Kuşbaşı: ${karne.kusbasi} | Kemikli: ${karne.kemikli} | Kemik: ${karne.kemik} | Fire: ${karne.fire}`;
+                        let alanAdi = karne.kullanilan_alan ? karne.kullanilan_alan : "Kümülatif Üretim";
                         
                         let html = `
                         <div class="flex flex-col mt-3">
@@ -444,9 +569,11 @@
                                         <span class="text-orange-400 font-black text-xl">${karne.kalan} <small class="text-xs">KG</small></span>
                                     </div>
                                 </div>
-                                <div class="w-full md:w-1/3 flex justify-end items-center gap-4">
+                                <div class="w-full md:w-1/3 flex justify-end items-center gap-3">
                                     ${karne.islenen > 0 ? `<div class="text-right hidden md:block"><span class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1">Fire Oranı</span><span class="font-black ${fireRenk}">%${karne.fire_oran}</span></div>` : ''}
-                                    <button class="bg-gray-700 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-600 transition" id="btn-${karne.id}">Detayı Gör ⬇️</button>
+                                    
+                                    <button onclick="event.stopPropagation(); openReceiptModal('${karne.urun} [No: ${karne.damga}]', '${karne.islenen}', '${alanAdi}', '${fisDetayStr}', '${karne.tarih}')" class="bg-gray-800 border border-gray-600 text-white px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-700 hover:text-indigo-300 transition shadow-sm ml-2">Özet Fiş 🧾</button>
+                                    <button class="bg-gray-700 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-600 transition shadow-sm" id="btn-${karne.id}">Detayı Gör ⬇️</button>
                                 </div>
                             </div>
                             
@@ -460,7 +587,9 @@
                                 </div>
                             </div>
                         </div>`;
-                        container.innerHTML += html;
+                        
+                        // ALTA EKLENİR
+                        container.insertAdjacentHTML('beforeend', html);
                     });
                     
                     lotOffset += 5;
@@ -469,6 +598,7 @@
                 })
                 .catch(err => {
                     btn.innerHTML = "Bağlantı Hatası!";
+                    btn.disabled = false;
                 });
         }
     </script>

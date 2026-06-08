@@ -1496,6 +1496,10 @@ def satis():
     conn.close()
     return render_template('satis.html', dis_paydaslar=dis_paydaslar, etkinlikler=etkinlikler, lokmalar=lokmalar, gelenler_aylik=gelenler_aylik, secilen_tarih=secilen_tarih, f_kampus=f_kampus, f_fiyat=f_fiyat, f_tahsilat=f_tahsilat)
 
+import re
+from flask import Blueprint, render_template, request, flash, redirect, url_for, session, jsonify
+from database import get_db_connection
+
 @app.route('/et-isleme', methods=['GET', 'POST'])
 @login_required
 @admin_required
@@ -1510,7 +1514,7 @@ def et_isleme():
 
     if request.method == 'POST':
         lot_id = request.form.get('kaynak_lot_id')
-        kullanilan_alan = request.form.get('kullanilan_alan', '').strip()
+        kullanilan_alan = request.form.get('kullanilan_alan', '').strip() or "Genel Mutfak Üretimi"
 
         def guvenli_float(deger):
             try: return float(deger) if deger else 0.0
@@ -1543,7 +1547,6 @@ def et_isleme():
                 if mevcut: conn.execute('UPDATE depo SET miktar = miktar + ? WHERE id=?', (mik, mevcut['id']))
                 else: conn.execute('INSERT INTO depo (kategori, urun_adi, miktar, birim) VALUES (?,?,?,?)', (kategori, urun, mik, 'KG'))
                 
-                # 👑 YENİ: Çıkan etlerin kimliğini (Lot) oluştur ki Oto-Tamir onları kaçak sanıp silmesin!
                 conn.execute("INSERT INTO stok_lotlari (urun_adi, marka, lot_damga_no, baslangic_miktar, kalan_miktar, birim) VALUES (?, ?, ?, ?, ?, ?)",
                              (urun, 'Kendi Üretimimiz', damga_no, mik, mik, 'KG'))
 
@@ -1557,7 +1560,8 @@ def et_isleme():
         conn.execute('INSERT INTO et_isleme_log (kaynak, harcanan, detay, lot_id, kullanilan_alan) VALUES (?,?,?,?,?)',
                      (kaynak_detay, harcanan, detay_str, lot_id, kullanilan_alan))
 
-        conn.commit(); flash(f"✅ {damga_no} damgalı karkas başarıyla parçalandı.", "success")
+        conn.commit()
+        flash(f"✅ {damga_no} damgalı karkas başarıyla parçalandı.", "success")
         return redirect(url_for('et_isleme'))
 
     et_stoklari = conn.execute("""
@@ -1569,13 +1573,12 @@ def et_isleme():
         ORDER BY sl.tarih ASC
     """).fetchall()
 
-    # ZIRHLI GEÇMİŞ LOG ALANI
     gecmis_islemler_raw = conn.execute("SELECT * FROM et_isleme_log ORDER BY id DESC LIMIT 5").fetchall()
     gecmis_islemler = []
     for row in gecmis_islemler_raw:
         r_dict = dict(row)
-        if 'kullanilan_alan' not in r_dict:
-            r_dict['kullanilan_alan'] = '-'
+        if 'kullanilan_alan' not in r_dict or not r_dict['kullanilan_alan']:
+            r_dict['kullanilan_alan'] = 'Genel Mutfak Üretimi'
         gecmis_islemler.append(r_dict)
 
     son_sevkiyatlar = conn.execute("""
@@ -1588,10 +1591,13 @@ def et_isleme():
 
     lot_karneleri = []
     for l in son_sevkiyatlar:
-        loglar = conn.execute("SELECT harcanan, detay FROM et_isleme_log WHERE lot_id=?", (l['id'],)).fetchall()
+        loglar = conn.execute("SELECT id, harcanan, detay, kullanilan_alan, tarih FROM et_isleme_log WHERE lot_id=?", (l['id'],)).fetchall()
         t_harcanan = 0; t_kiyma = 0; t_kusbasi = 0; t_kemikli = 0; t_kemik = 0; t_fire = 0
+        alanlar = []
         for lg in loglar:
             t_harcanan += lg['harcanan']
+            if lg['kullanilan_alan'] and lg['kullanilan_alan'] not in alanlar:
+                alanlar.append(lg['kullanilan_alan'])
             d = lg['detay']
             try: t_kiyma += float(re.search(r'Kıyma:\s*([\d\.]+)', d).group(1))
             except: pass
@@ -1602,18 +1608,82 @@ def et_isleme():
             try: t_kemik += float(re.search(r'Kemik:\s*([\d\.]+)', d).group(1))     
             except: pass
             try: t_fire += float(re.search(r'Fire:\s*([\d\.]+)', d).group(1))       
-            except: pass # 🟢 DÜZELTİLDİ: Unutulan except bloğu eklendi!
+            except: pass
 
         lot_karneleri.append({
-            'id': l['id'], 'tarih': l['tarih'][:10], 'damga': l['lot_damga_no'] if l['lot_damga_no'] else 'DAMGASIZ',
-            'urun': l['urun_adi'], 'baslangic': l['baslangic_miktar'], 'kalan': l['kalan_miktar'],
-            'islenen': t_harcanan, 'kiyma': t_kiyma, 'kusbasi': t_kusbasi, 'kemikli': t_kemikli, 'kemik': t_kemik, 'fire': t_fire,
+            'id': l['id'], 
+            'tarih': l['tarih'][:16] if l['tarih'] else '-', 
+            'damga': l['lot_damga_no'] if l['lot_damga_no'] else 'DAMGASIZ',
+            'urun': l['urun_adi'], 
+            'baslangic': l['baslangic_miktar'], 
+            'kalan': l['kalan_miktar'],
+            'islenen': t_harcanan, 
+            'kiyma': t_kiyma, 
+            'kusbasi': t_kusbasi, 
+            'kemikli': t_kemikli, 
+            'kemik': t_kemik, 
+            'fire': t_fire,
+            'kullanilan_alan': ", ".join(alanlar) if alanlar else "Genel Üretim",
             'fire_oran': round((t_fire / t_harcanan * 100), 1) if t_harcanan > 0 else 0
         })
 
     conn.close()
     return render_template('et_isleme.html', et_stoklari=et_stoklari, gecmis_islemler=gecmis_islemler, lot_karneleri=lot_karneleri)
 
+
+@app.route('/api/et-arsivi/<int:offset>')
+@login_required
+def et_arsivi_api(offset):
+    import re
+    conn = get_db_connection()
+
+    lotlar = conn.execute("""
+        SELECT sl.* FROM stok_lotlari sl
+        JOIN depo d ON sl.urun_adi = d.urun_adi
+        WHERE d.kategori IN ('Kırmızı Et', '🥩 Kırmızı Et')
+        AND sl.urun_adi NOT LIKE '%Kıyma%' AND sl.urun_adi NOT LIKE '%Kuşbaşı%' AND sl.urun_adi NOT LIKE '%Kemik%'
+        ORDER BY sl.id DESC LIMIT 5 OFFSET ?
+    """, (offset,)).fetchall()
+
+    lot_karneleri = []
+    for l in lotlar:
+        loglar = conn.execute("SELECT harcanan, detay, kullanilan_alan, tarih FROM et_isleme_log WHERE lot_id=?", (l['id'],)).fetchall()
+        t_harcanan = 0; t_kiyma = 0; t_kusbasi = 0; t_kemikli = 0; t_kemik = 0; t_fire = 0
+        alanlar = []
+        for lg in loglar:
+            t_harcanan += lg['harcanan']
+            if lg['kullanilan_alan'] and lg['kullanilan_alan'] not in alanlar:
+                alanlar.append(lg['kullanilan_alan'])
+            d = lg['detay']
+            try: t_kiyma += float(re.search(r'Kıyma:\s*([\d\.]+)', d).group(1))
+            except: pass
+            try: t_kusbasi += float(re.search(r'Kuşbaşı:\s*([\d\.]+)', d).group(1))
+            except: pass
+            try: t_kemikli += float(re.search(r'Kemikli:\s*([\d\.]+)', d).group(1))
+            except: pass
+            try: t_kemik += float(re.search(r'Kemik:\s*([\d\.]+)', d).group(1))     
+            except: pass
+            try: t_fire += float(re.search(r'Fire:\s*([\d\.]+)', d).group(1))       
+            except: pass
+
+        lot_karneleri.append({
+            'id': l['id'], 
+            'tarih': l['tarih'][:16] if l['tarih'] else '-', 
+            'damga': l['lot_damga_no'] if l['lot_damga_no'] else 'DAMGASIZ',
+            'urun': l['urun_adi'], 
+            'baslangic': l['baslangic_miktar'], 
+            'kalan': l['kalan_miktar'],
+            'islenen': t_harcanan, 
+            'kiyma': t_kiyma, 
+            'kusbasi': t_kusbasi, 
+            'kemikli': t_kemikli, 
+            'kemik': t_kemik, 
+            'fire': t_fire,
+            'kullanilan_alan': ", ".join(alanlar) if alanlar else "Genel Üretim",
+            'fire_oran': round((t_fire / t_harcanan * 100), 1) if t_harcanan > 0 else 0
+        })
+    conn.close()
+    return jsonify(lot_karneleri)
 @app.route('/yedek-uretim', methods=['GET', 'POST'])
 @login_required
 @admin_required
@@ -2237,49 +2307,3 @@ def personel_import():
         flash(f"Hata: {str(e)}", "error")
 
     return redirect(url_for('personel'))
-@app.route('/api/et-arsivi/<int:offset>')
-@login_required
-def et_arsivi_api(offset):
-    from flask import jsonify
-    import re
-    conn = get_db_connection()
-
-    lotlar = conn.execute("""
-        SELECT sl.* FROM stok_lotlari sl
-        JOIN depo d ON sl.urun_adi = d.urun_adi
-        WHERE d.kategori IN ('Kırmızı Et', '🥩 Kırmızı Et')
-        AND sl.urun_adi NOT LIKE '%Kıyma%' AND sl.urun_adi NOT LIKE '%Kuşbaşı%' AND sl.urun_adi NOT LIKE '%Kemik%'
-        ORDER BY sl.id DESC LIMIT 5 OFFSET ?
-    """, (offset,)).fetchall()
-
-    lot_karneleri = []
-    for l in lotlar:
-        loglar = conn.execute("SELECT harcanan, detay FROM et_isleme_log WHERE lot_id=?", (l['id'],)).fetchall()
-        # Sote gitti. Kemikli ve Fire'nin ilk değeri 0 olarak eklendi:
-        t_harcanan = 0; t_kiyma = 0; t_kusbasi = 0; t_kemikli = 0; t_kemik = 0; t_fire = 0
-        for lg in loglar:
-            t_harcanan += lg['harcanan']
-            d = lg['detay']
-            try: t_kiyma += float(re.search(r'Kıyma:\s*([\d\.]+)', d).group(1))
-            except: pass
-            try: t_kusbasi += float(re.search(r'Kuşbaşı:\s*([\d\.]+)', d).group(1))
-            except: pass
-            try: t_kemikli += float(re.search(r'Kemikli:\s*([\d\.]+)', d).group(1)) # Sote gitti Kemikli geldi
-            except: pass
-            try: t_kemik += float(re.search(r'Kemik:\s*([\d\.]+)', d).group(1))     # Sadece Kemik
-            except: pass
-            try: t_fire += float(re.search(r'Fire:\s*([\d\.]+)', d).group(1))       # Sadece Fire
-            except: pass
-
-        lot_karneleri.append({
-            'id': l['id'], 'tarih': l['tarih'][:10], 'damga': l['lot_damga_no'] if l['lot_damga_no'] else 'DAMGASIZ',
-            'urun': l['urun_adi'], 'baslangic': l['baslangic_miktar'], 'kalan': l['kalan_miktar'],
-            'islenen': t_harcanan, 'kiyma': t_kiyma, 'kusbasi': t_kusbasi, 'kemikli': t_kemikli, 'kemik': t_kemik, 'fire': t_fire,
-            'fire_oran': round((t_fire / t_harcanan * 100), 1) if t_harcanan > 0 else 0
-        })
-    conn.close()
-    return jsonify(lot_karneleri)
-
-if __name__ == '__main__':
-    init_db()
-    app.run(host='0.0.0.0', port=5001, debug=True)
