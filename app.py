@@ -1804,6 +1804,32 @@ def et_loglari_api(offset):
         return jsonify(loglar)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+@app.route('/et-isleme/secmeli-lot-sil', methods=['POST'])
+@login_required
+@admin_required
+def et_secmeli_lot_sil():
+    conn = get_db_connection()
+    secilen_idler = request.form.getlist('secilen_lotlar')
+    
+    if not secilen_idler:
+        flash("HATA: Lütfen silmek için en az bir karkas seçin!", "error")
+        return redirect(url_for('et_isleme'))
+        
+    silinen_sayisi = 0
+    for lot_id in secilen_idler:
+        lot = conn.execute("SELECT id, kalan_miktar, urun_adi FROM stok_lotlari WHERE id=?", (lot_id,)).fetchone()
+        if lot:
+            # 1. Ana depodan karkas miktarını güvenlice düş
+            conn.execute("UPDATE depo SET miktar = MAX(0, miktar - ?) WHERE urun_adi COLLATE NOCASE = ?", (lot['kalan_miktar'], lot['urun_adi']))
+            # 2. Lot kaydını komple sil
+            conn.execute("DELETE FROM stok_lotlari WHERE id=?", (lot['id'],))
+            silinen_sayisi += 1
+            
+    conn.commit()
+    conn.close()
+    
+    flash(f"🧹 Başarılı: Seçtiğiniz {silinen_sayisi} adet karkas lotu sistemden tamamen silindi.", "success")
+    return redirect(url_for('et_isleme'))
 
 @app.route('/yedek-uretim', methods=['GET', 'POST'])
 @login_required
