@@ -57,45 +57,47 @@
                     📅 {{ ay_isimleri[secilen_ay] }} Ayı Bakım İşlemleri
                 </h2>
                 
-                <div class="space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-4">
                     {% for ab in aylik_bakimlar %}
-                    <div class="bg-white p-5 rounded-2xl shadow-sm border transition flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 {% if ab.durum == 'Yapıldı' %}border-emerald-200 bg-emerald-50/20{% else %}border-rose-200 bg-rose-50/20 hover:border-rose-300{% endif %}">
-                        <div class="flex items-start gap-4">
-                            <div class="mt-1 shrink-0 w-8 h-8 rounded-full flex items-center justify-center {% if ab.durum == 'Yapıldı' %}bg-emerald-100 text-emerald-600{% else %}bg-rose-100 text-rose-600{% endif %}">
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border transition flex flex-col justify-between gap-4 relative overflow-hidden {% if ab.durum == 'Yapıldı' %}border-emerald-200 bg-emerald-50/10{% else %}border-rose-200 bg-rose-50/10 hover:border-rose-300 hover:shadow-md{% endif %}">
+                        
+                        <div class="absolute top-0 left-0 w-full h-1 {% if ab.durum == 'Yapıldı' %}bg-emerald-400{% else %}bg-rose-400{% endif %}"></div>
+
+                        <div class="flex items-start gap-3 mt-1">
+                            <div class="shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-black text-sm {% if ab.durum == 'Yapıldı' %}bg-emerald-100 text-emerald-600{% else %}bg-rose-100 text-rose-600{% endif %}">
                                 {% if ab.durum == 'Yapıldı' %}✓{% else %}!{% endif %}
                             </div>
-                            <div>
-                                <h4 class="text-base font-black text-slate-800">{{ ab.ekipman_adi }}</h4>
+                            <div class="min-w-0 flex-1">
+                                <h4 class="text-[13px] leading-tight font-black text-slate-800 truncate" title="{{ ab.ekipman_adi }}">{{ ab.ekipman_adi }}</h4>
                                 {% if ab.durum == 'Yapıldı' %}
-                                    <span class="text-[11px] font-bold text-emerald-600 mt-0.5 block">Bu ayın evrakları sisteme işlendi.</span>
+                                    <span class="text-[9px] font-bold text-emerald-500 mt-1 uppercase tracking-widest block truncate">Evrak İşlendi</span>
                                 {% else %}
-                                    <span class="text-[11px] font-bold text-rose-500 mt-0.5 block">Bakım bekleniyor. İşlem bittikten sonra onaylayın.</span>
+                                    <span class="text-[9px] font-bold text-rose-500 mt-1 uppercase tracking-widest block truncate">Bakım Bekliyor</span>
                                 {% endif %}
                             </div>
                         </div>
                         
-                        <div class="w-full sm:w-auto shrink-0">
+                        <div class="mt-auto">
                             {% if ab.durum == 'Yapıldı' %}
-                                <form action="/periyodik-bakim" method="POST" class="m-0 flex items-center gap-2 w-full justify-end">
-                                    <span class="bg-white border border-emerald-200 text-emerald-600 font-black px-3 py-2 rounded-lg text-[10px] uppercase tracking-widest shadow-sm">✅ EVRAK ALINDI</span>
+                                <form action="/periyodik-bakim" method="POST" class="m-0 flex items-center justify-between gap-2 w-full">
+                                    <span class="bg-emerald-50 border border-emerald-100 text-emerald-600 font-black px-2 py-1.5 rounded-lg text-[9px] uppercase tracking-widest text-center flex-1">Tamamlandı</span>
                                     <input type="hidden" name="islem_tipi" value="bakim_geri_al"><input type="hidden" name="bakim_id" value="{{ ab.id }}"><input type="hidden" name="yil" value="{{ secilen_yil }}"><input type="hidden" name="ay" value="{{ secilen_ay }}">
-                                    <button type="submit" class="text-slate-400 hover:text-rose-500 font-bold p-2 transition" title="Geri Al / İptal Et">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                                    <button type="submit" class="bg-white border border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50 font-bold p-1.5 rounded-lg transition shadow-sm shrink-0" title="Geri Al / İptal Et">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
                                     </button>
                                 </form>
                             {% else %}
                                 <form action="/periyodik-bakim" method="POST" class="m-0 w-full">
                                     <input type="hidden" name="islem_tipi" value="bakim_yapildi"><input type="hidden" name="bakim_id" value="{{ ab.id }}"><input type="hidden" name="yil" value="{{ secilen_yil }}"><input type="hidden" name="ay" value="{{ secilen_ay }}">
-                                    <button type="submit" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-black px-5 py-2.5 rounded-xl transition shadow-sm text-[10px] uppercase tracking-widest">Evrak Alındı (Onayla)</button>
+                                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-2 rounded-lg transition shadow-sm text-[9px] uppercase tracking-widest">Evrak Alındı (Onayla)</button>
                                 </form>
                             {% endif %}
                         </div>
                     </div>
                     {% else %}
-                    <div class="bg-white p-10 rounded-2xl text-center shadow-sm border border-slate-200 border-dashed">
-                        <span class="text-4xl block mb-3 opacity-50">🎊</span>
-                        <h4 class="text-slate-500 font-bold text-xs uppercase tracking-widest">Bu Ay İçin Bakım Yok</h4>
-                        <p class="text-slate-400 text-xs mt-1">Seçili ay için planlanmış bir periyodik bakım bulunmuyor.</p>
+                    <div class="col-span-full bg-white p-8 rounded-2xl text-center shadow-sm border border-slate-200 border-dashed">
+                        <span class="text-3xl block mb-2 opacity-50">🎊</span>
+                        <h4 class="text-slate-500 font-bold text-[10px] uppercase tracking-widest">Bu Ay İçin Bakım Yok</h4>
                     </div>
                     {% endfor %}
                 </div>
@@ -141,47 +143,46 @@
                 </div>
             </div>
             
-            <div class="overflow-x-auto custom-scrollbar border border-slate-100 rounded-2xl">
+            <div class="overflow-x-auto custom-scrollbar border border-slate-200 rounded-xl shadow-sm">
                 <table class="w-full text-left whitespace-nowrap">
-                    <thead class="bg-slate-50 text-slate-400 uppercase text-[9px] font-black tracking-widest border-b border-slate-100">
+                    <thead class="bg-slate-100 text-slate-500 uppercase text-[9px] font-black tracking-widest border-b border-slate-200">
                         <tr>
-                            <th class="p-4 pl-6 sticky left-0 bg-slate-50 z-10 w-64 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">Cihaz / Ekipman Adı</th>
+                            <th class="py-2.5 px-4 sticky left-0 bg-slate-100 z-10 w-64 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">Cihaz / Ekipman Adı</th>
                             {% for ay_no, ay_isim in ay_isimleri.items() %}
-                            <th class="p-4 text-center">{{ ay_isim[:3] }}</th>
+                            <th class="py-2.5 px-2 text-center border-l border-slate-200/50">{{ ay_isim[:3] }}</th>
                             {% endfor %}
-                            <th class="p-4 text-right pr-6">İşlem</th>
+                            <th class="py-2.5 px-4 text-center border-l border-slate-200/50">İşlem</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-50 text-xs">
+                    <tbody class="divide-y divide-slate-100 text-[11px]">
                         {% for b in bakimlar %}
-                        <tr class="hover:bg-slate-50/50 transition">
-                            <td class="p-4 pl-6 font-black text-slate-700 sticky left-0 bg-white group-hover:bg-slate-50 z-10 truncate max-w-[250px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.02)] transition-colors">{{ b.ekipman_adi }}</td>
+                        <tr class="hover:bg-slate-50 transition">
+                            <td class="py-2 px-4 font-black text-slate-700 sticky left-0 bg-white group-hover:bg-slate-50 z-10 truncate max-w-[200px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] transition-colors" title="{{ b.ekipman_adi }}">{{ b.ekipman_adi }}</td>
                             
-                            <!-- MATRİS HÜCRELERİ (1'den 12'ye) -->
                             {% for ay_no in range(1, 13) %}
                                 {% set durum = matris[b.id]['aylar'][ay_no|string] %}
-                                <td class="p-3 text-center border-l border-slate-50">
+                                <td class="py-2 px-1 text-center border-l border-slate-100">
                                     {% if durum == 'Yapıldı' %}
-                                        <div class="w-6 h-6 mx-auto bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-full flex items-center justify-center text-[10px] font-black cursor-help transition hover:scale-110 shadow-sm" title="Evrak Alındı (Tamamlandı)">✓</div>
+                                        <div class="w-5 h-5 mx-auto bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-full flex items-center justify-center text-[9px] font-black cursor-help transition hover:scale-110 shadow-sm" title="Evrak Alındı (Tamamlandı)">✓</div>
                                     {% elif durum == 'Bekliyor' %}
-                                        <div class="w-6 h-6 mx-auto bg-rose-50 text-rose-500 border border-rose-200 rounded-full flex items-center justify-center text-[10px] font-black cursor-help transition hover:scale-110 shadow-sm" title="Bakım Bekliyor!">!</div>
+                                        <div class="w-5 h-5 mx-auto bg-rose-50 text-rose-500 border border-rose-200 rounded-full flex items-center justify-center text-[10px] font-black cursor-help transition hover:scale-110 shadow-sm" title="Bakım Bekliyor!">!</div>
                                     {% else %}
                                         <div class="w-1.5 h-1.5 mx-auto bg-slate-200 rounded-full" title="Planlama Yok"></div>
                                     {% endif %}
                                 </td>
                             {% endfor %}
                             
-                            <td class="p-4 text-right pr-6">
-                                <form action="/periyodik-bakim" method="POST" class="m-0" onsubmit="return confirm('Bu cihazı ve tüm geçmiş loglarını silmek istediğinize emin misiniz?');">
+                            <td class="py-2 px-4 text-center border-l border-slate-100">
+                                <form action="/periyodik-bakim" method="POST" class="m-0 inline-block" onsubmit="return confirm('Bu cihazı ve tüm geçmiş loglarını silmek istediğinize emin misiniz?');">
                                     <input type="hidden" name="islem_tipi" value="bakim_sil"><input type="hidden" name="bakim_id" value="{{ b.id }}"><input type="hidden" name="yil" value="{{ secilen_yil }}"><input type="hidden" name="ay" value="{{ secilen_ay }}">
-                                    <button type="submit" class="text-slate-300 hover:text-rose-500 font-bold p-1.5 rounded-md hover:bg-rose-50 transition" title="Cihazı Sil">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                    <button type="submit" class="text-slate-300 hover:text-rose-500 hover:bg-rose-50 p-1 rounded transition" title="Cihazı Sil">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                                     </button>
                                 </form>
                             </td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="14" class="p-12 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Sisteme kayıtlı periyodik bakım cihazı bulunmuyor.</td></tr>
+                        <tr><td colspan="14" class="p-8 text-center text-slate-400 font-bold uppercase tracking-widest text-[10px]">Sisteme kayıtlı periyodik bakım cihazı bulunmuyor.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
