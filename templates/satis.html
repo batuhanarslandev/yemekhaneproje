@@ -123,9 +123,6 @@
                 <button id="btn-tab-muhasebe" onclick="openTab('tab-muhasebe')" class="tab-btn bg-transparent text-slate-500 hover:bg-slate-100 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition whitespace-nowrap">📈 Aylık Bilanço</button>
             </div>
 
-            <!-- ========================================== -->
-            <!-- SEKME 1: SATIŞ VE TAHSİLAT -->
-            <!-- ========================================== -->
             <div id="tab-satis" class="tab-content hidden space-y-8">
                 <div class="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200">
                     <h3 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-2">➕ Satış / Gerçekleşen Kayıt Ekle</h3>
@@ -280,9 +277,6 @@
                 </div>
             </div>
 
-            <!-- ========================================== -->
-            <!-- SEKME 2: ETKİNLİK PLANLAMA -->
-            <!-- ========================================== -->
             <div id="tab-etkinlik" class="tab-content hidden space-y-8">
                 <div class="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200">
                     <h3 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-2">📅 Organizasyon & Etkinlik Planla</h3>
@@ -386,9 +380,6 @@
                 </div>
             </div>
 
-            <!-- ========================================== -->
-            <!-- YENİ SEKME 3: LOKMA DAĞITIMLARI -->
-            <!-- ========================================== -->
             <div id="tab-lokma" class="tab-content hidden space-y-8">
                 <div class="bg-amber-50 p-6 md:p-8 rounded-[2rem] shadow-sm border border-amber-200">
                     <h3 class="text-lg font-black text-amber-900 mb-6 flex items-center gap-2">🍩 Dışarıdan Gelen İkram / Lokma Planla</h3>
@@ -474,9 +465,6 @@
                 </div>
             </div>
 
-            <!-- ========================================== -->
-            <!-- SEKME 4: AYLIK BİLANÇO -->
-            <!-- ========================================== -->
             <div id="tab-muhasebe" class="tab-content hidden space-y-6">
                 <div class="bg-slate-800 p-6 rounded-[2rem] shadow-sm border border-slate-700">
                     <form method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end" onsubmit="localStorage.setItem('satisSekme', 'tab-muhasebe');">
@@ -524,6 +512,7 @@
                                     <th class="p-5 text-center">Kişi</th>
                                     <th class="p-5 text-center">Tarife</th>
                                     <th class="p-5 text-right">Toplam Tutar</th>
+                                    <th class="px-6 py-4 text-center">Belgeler & Dekontlar</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-50">
@@ -536,16 +525,26 @@
                                     <td class="p-5 text-center font-black text-xs">{{ g.kisi_sayisi }}</td>
                                     <td class="p-5 text-center text-indigo-600 font-black text-xs whitespace-nowrap">{{ g.tarife }}</td>
                                     <td class="p-5 text-right font-black text-slate-800 text-xs whitespace-nowrap">{{ "%.2f"|format(g.toplam_tutar) }} ₺</td>
+                                    <td class="px-6 py-4 text-center">
+                                        {% if g.dekont_yolu %}
+                                            <a href="{{ g.dekont_yolu }}" target="_blank" class="inline-flex items-center gap-1 bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition shadow-sm">
+                                                📄 Dekont
+                                            </a>
+                                        {% else %}
+                                            <span class="text-[10px] text-gray-400 font-bold">- Yok -</span>
+                                        {% endif %}
+                                    </td>
                                 </tr>
                                 {% set toplam_aylik.value = toplam_aylik.value + g.toplam_tutar %}
                                 {% else %}
-                                <tr><td colspan="6" class="p-10 text-center text-slate-400 font-bold italic text-xs uppercase tracking-widest">Seçilen kriterlere uygun kayıt bulunamadı.</td></tr>
+                                <tr><td colspan="7" class="p-10 text-center text-slate-400 font-bold italic text-xs uppercase tracking-widest">Seçilen kriterlere uygun kayıt bulunamadı.</td></tr>
                                 {% endfor %}
                             </tbody>
                             <tfoot class="bg-slate-800 text-white">
                                 <tr>
-                                    <td colspan="4" class="p-5 text-right font-black text-slate-400 uppercase tracking-widest text-xs">Filtrelenmiş Toplam Ciro:</td>
-                                    <td colspan="2" class="p-5 text-right pr-6 font-black text-white text-xl">{{ "%.2f"|format(toplam_aylik.value) }} ₺</td>
+                                    <td colspan="5" class="p-5 text-right font-black text-slate-400 uppercase tracking-widest text-xs">Filtrelenmiş Toplam Ciro:</td>
+                                    <td class="p-5 text-right font-black text-white text-xl">{{ "%.2f"|format(toplam_aylik.value) }} ₺</td>
+                                    <td class="p-5 text-center"></td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -556,7 +555,6 @@
         </div>
     </div>
 
-    <!-- MODAL: SATIŞA AKTARMA -->
     <div id="transferModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] items-center justify-center p-4">
         <div class="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden transform transition-all">
             <div class="bg-slate-50 p-6 flex justify-between items-center border-b border-slate-200">
@@ -614,7 +612,6 @@
         </div>
     </div>
 
-    <!-- MODAL: DURUM GÜNCELLE -->
     <div id="statusModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] items-center justify-center p-4">
         <div class="bg-white w-full max-w-sm rounded-[2rem] shadow-2xl border border-slate-200 overflow-hidden transform transition-all">
             <div class="bg-slate-50 p-5 flex justify-between items-center border-b border-slate-200">

@@ -597,9 +597,15 @@ def mal_kabul():
     loglar = conn.execute("SELECT * FROM mal_kabul_log WHERE onay_durumu IN ('Onaylandı', 'Şartlı Kabul') AND tarih LIKE ? ORDER BY tarih DESC", (f"{secilen_ay}%",)).fetchall()
     red_loglar = conn.execute("SELECT * FROM mal_kabul_log WHERE onay_durumu IN ('Red (İade)', 'Reddedildi') AND tarih LIKE ? ORDER BY tarih DESC", (f"{secilen_ay}%",)).fetchall()
 
-    conn.close()
-    return render_template('mal_kabul.html', loglar=loglar, red_loglar=red_loglar, bekleyenler=bekleyenler, secilen_ay=secilen_ay)
+    secilen_ay = request.args.get('ay', date.today().strftime('%Y-%m'))
+    bekleyenler = conn.execute("SELECT * FROM mal_kabul_log WHERE onay_durumu='Bekliyor' ORDER BY tarih DESC").fetchall()
+    loglar = conn.execute("SELECT * FROM mal_kabul_log WHERE onay_durumu IN ('Onaylandı', 'Şartlı Kabul') AND tarih LIKE ? ORDER BY tarih DESC", (f"{secilen_ay}%",)).fetchall()
+    red_loglar = conn.execute("SELECT * FROM mal_kabul_log WHERE onay_durumu IN ('Red (İade)', 'Reddedildi') AND tarih LIKE ? ORDER BY tarih DESC", (f"{secilen_ay}%",)).fetchall()
+    depo_urunler_raw = conn.execute("SELECT DISTINCT urun_adi FROM depo ORDER BY urun_adi").fetchall()
+    depo_urunleri = [row['urun_adi'] for row in depo_urunler_raw]
 
+    conn.close()
+    return render_template('mal_kabul.html', loglar=loglar, red_loglar=red_loglar, bekleyenler=bekleyenler, secilen_ay=secilen_ay, depo_urunleri=depo_urunleri)
 @app.route('/depo', methods=['GET', 'POST'])
 @login_required
 def depo():
@@ -854,8 +860,19 @@ def depo():
             
             mevcut = conn.execute("SELECT * FROM dondurucu_stok WHERE id=?", (d_id,)).fetchone()
             if mevcut and mevcut['miktar'] >= cikan_miktar:
+                # 1. Miktarı Düş
                 conn.execute("UPDATE dondurucu_stok SET miktar = miktar - ? WHERE id=?", (cikan_miktar, d_id))
-                # Stoğu sıfırlananı temizle
+                # 2. Geçmiş Log Tablosuna Yaz (Sistem Hafızası İçin - Tablo Yoksa Oluşturur)
+                try:
+                    conn.execute('''CREATE TABLE IF NOT EXISTS depo_hareketleri (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        tarih TEXT DEFAULT CURRENT_TIMESTAMP, islem_tipi TEXT, urun_adi TEXT, 
+                        miktar REAL, birim TEXT, islem_notu TEXT, yapan TEXT)''')
+                    conn.execute("INSERT INTO depo_hareketleri (islem_tipi, urun_adi, miktar, birim, islem_notu, yapan) VALUES (?,?,?,?,?,?)",
+                                 ('Dondurucudan Çıkış', mevcut['urun_adi'], cikan_miktar, mevcut['birim'], "Servise/Kullanıma Çıkarıldı", session.get('isim', 'Sistem')))
+                except Exception as e: print("Log Hatası:", e)
+                
+                # 3. Stoğu sıfırlananı temizle
                 conn.execute("DELETE FROM dondurucu_stok WHERE miktar <= 0")
                 flash(f"❄️ Dondurucudan {cikan_miktar} {mevcut['birim']} {mevcut['urun_adi']} servise/kullanıma çıkarıldı.", "success")
             else:
@@ -925,6 +942,37 @@ def depo():
     conn.close()
     return render_template('depo.html', stoklar=stoklar, detayli_stoklar=detayli_stoklar, cikislar=cikislar, bekleyen_cikislar=bekleyen_cikislar, bugun=bugun, kategoriler=kategoriler, planlananlar=planlananlar, dondurucu_stoklar=dondurucu_stoklar)
 
+@app.route('/api/dondurucu-gecmisi/<urun_adi>')
+@login_required
+def api_dondurucu_gecmisi(urun_adi):
+    from flask import jsonify
+    try:
+        conn = get_db_connection()
+        # 1. Girişleri çekiyoruz (mal_kabul_log ve dondurucu_stok'a ilk girişler)
+        girisler = conn.execute("""
+            SELECT tarih, islem_tipi as tur, urun_adi, miktar, birim, islem_notu as notlar, yapan as kisi 
+            FROM depo_hareketleri 
+            WHERE urun_adi COLLATE NOCASE = ? AND islem_tipi IN ('Dondurucu Giriş', 'Donmuş Mal Kabul')
+            ORDER BY tarih DESC
+        """, (urun_adi,)).fetchall()
+        
+        # 2. Çıkışları çekiyoruz (Dondurucudan çıkartılıp kullanılanlar)
+        cikislar = conn.execute("""
+            SELECT tarih, islem_tipi as tur, urun_adi, miktar, birim, islem_notu as notlar, yapan as kisi 
+            FROM depo_hareketleri 
+            WHERE urun_adi COLLATE NOCASE = ? AND islem_tipi = 'Dondurucudan Çıkış'
+            ORDER BY tarih DESC
+        """, (urun_adi,)).fetchall()
+        
+        tum_gecmis = [dict(row) for row in girisler] + [dict(row) for row in cikislar]
+        
+        # Tarihe göre büyükten küçüğe sırala
+        tum_gecmis.sort(key=lambda x: x['tarih'], reverse=True)
+        
+        conn.close()
+        return jsonify({"gecmis": tum_gecmis})
+    except Exception as e:
+        return jsonify({"gecmis": [], "error": str(e)})
 # ==========================================
 # ÜRETİM VE HAFIZALI MENÜ PLANLAMA MOTORU
 # ==========================================
@@ -1475,9 +1523,9 @@ def satis():
 
     dis_paydaslar = conn.execute("""
         SELECT * FROM dis_paydas_satis
-        WHERE NOT ((tahsilat_durumu LIKE '✅%' OR tahsilat_durumu LIKE '🎁%') AND (firma_odeme_durumu LIKE '✅%' OR firma_odeme_durumu LIKE '❌%'))
+        WHERE tarih LIKE ?
         ORDER BY tarih DESC, id DESC
-    """).fetchall()
+    """, (f"{mevcut_ay}%",)).fetchall()
 
     etkinlikler = conn.execute('SELECT * FROM etkinlikler ORDER BY id DESC').fetchall()
     

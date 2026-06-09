@@ -264,7 +264,7 @@
                     </thead>
                     <tbody class="divide-y divide-sky-50">
                         {% for d in dondurucu_stoklar %}
-                        <tr class="hover:bg-sky-50/30 transition-all duration-300">
+                        <tr class="hover:bg-sky-50/30 transition-all duration-300 cursor-pointer" onclick="openDondurucuModal('{{ d.urun_adi }}', '{{ d.tur }}', '{{ d.miktar|int if d.miktar % 1 == 0 else d.miktar|round(2) }} {{ d.birim }}')">
                             <td class="p-6">
                                 <span class="font-black text-gray-800 text-lg">{{ d.urun_adi }}</span>
                                 <span class="text-[10px] font-bold text-gray-400 block mt-1">Dolaba Giriş: {{ d.islem_tarihi }}</span>
@@ -280,7 +280,7 @@
                                 <span class="font-black text-sky-600 text-xl">{{ d.miktar|int if d.miktar % 1 == 0 else d.miktar|round(2) }} <small class="text-xs text-sky-400">{{ d.birim }}</small></span>
                             </td>
                             <td class="p-6 text-right">
-                                <form action="/depo" method="POST" class="m-0 flex items-center justify-end gap-2" onsubmit="return confirm('Dondurucudan ürünü çıkartmak üzeresiniz. Emin misiniz?');">
+                                <form action="/depo" method="POST" class="m-0 flex items-center justify-end gap-2 relative z-20" onclick="event.stopPropagation();" onsubmit="return confirm('Dondurucudan ürünü çıkartmak üzeresiniz. Emin misiniz?');">
                                     <input type="hidden" name="islem_tipi" value="dondurucu_cikis">
                                     <input type="hidden" name="dondurucu_id" value="{{ d.id }}">
                                     <input type="number" step="0.01" name="miktar" placeholder="Miktar" required class="w-24 border-2 border-sky-100 p-2.5 rounded-xl font-black text-center outline-none bg-white focus:border-sky-400 transition text-sm text-sky-900 shadow-inner">
@@ -591,5 +591,100 @@
             </form>
         </div>
     </div>
+    <div id="dondurucuModal" class="hidden fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-opacity duration-300 opacity-0">
+        <div class="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl overflow-hidden transform scale-95 transition-transform duration-300" id="dondurucuModalBox">
+            
+            <div class="bg-sky-800 p-6 flex justify-between items-center border-b-4 border-sky-400">
+                <h3 class="text-white font-black uppercase tracking-widest text-sm flex items-center gap-2"><span class="text-xl">❄️</span> <span id="modalDondurucuUrunAdi">Ürün Adı</span> - Dondurucu Geçmişi</h3>
+                <button onclick="closeDondurucuModal()" class="text-sky-300 hover:text-white transition text-2xl focus:outline-none">&times;</button>
+            </div>
+            
+            <div class="p-8 max-h-[80vh] overflow-y-auto custom-scrollbar">
+                
+                <div class="flex justify-between items-center bg-sky-50 border border-sky-100 p-4 rounded-2xl mb-8">
+                    <div>
+                        <span class="block text-[10px] font-black text-sky-500 uppercase tracking-widest mb-1">Mevcut Dondurucu Stoğu</span>
+                        <span id="modalDondurucuMiktar" class="font-black text-sky-900 text-2xl">0 KG</span>
+                    </div>
+                    <div class="text-right">
+                        <span class="block text-[10px] font-black text-sky-500 uppercase tracking-widest mb-1">Ürün Türü / Kaynağı</span>
+                        <span id="modalDondurucuTur" class="font-bold text-gray-600">Hazır Yemek</span>
+                    </div>
+                </div>
+
+                <h4 class="font-black text-gray-800 text-sm uppercase tracking-widest mb-4 flex items-center gap-2"><span>📅</span> Hareket Geçmişi (Dolaba Giriş / Çıkış)</h4>
+                
+                <div class="bg-gray-50 border border-gray-100 rounded-2xl p-4">
+                    <div id="dondurucuGecmisListesi" class="space-y-3">
+                        <div class="text-center py-4 text-sky-400 font-bold text-xs animate-pulse">Buzlar Çözülüyor, Kayıtlar Aranıyor... ⏳</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openDondurucuModal(urunAdi, tur, miktar) {
+            document.getElementById('modalDondurucuUrunAdi').innerText = urunAdi;
+            document.getElementById('modalDondurucuTur').innerText = tur;
+            document.getElementById('modalDondurucuMiktar').innerText = miktar;
+            
+            const m = document.getElementById('dondurucuModal');
+            const b = document.getElementById('dondurucuModalBox');
+            m.classList.remove('hidden');
+            setTimeout(() => { m.classList.add('opacity-100'); b.classList.add('scale-100'); }, 10);
+
+            const container = document.getElementById('dondurucuGecmisListesi');
+            container.innerHTML = '<div class="text-center py-4 text-sky-400 font-bold text-xs animate-pulse">Buzlar Çözülüyor, Kayıtlar Aranıyor... ⏳</div>';
+            
+            fetch('/api/dondurucu-gecmisi/' + encodeURIComponent(urunAdi))
+                .then(response => response.json())
+                .then(data => {
+                    let gecmis = data.gecmis || [];
+                    container.innerHTML = '';
+                    
+                    if (gecmis.length === 0) {
+                        container.innerHTML = '<div class="text-center py-6 text-gray-400 font-bold text-xs uppercase tracking-widest">Bu ürüne ait geçmiş hareket bulunamadı.</div>';
+                        return;
+                    }
+                    
+                    gecmis.forEach(kayit => {
+                        let isGiris = kayit.tur.includes('Giriş') || kayit.tur.includes('Kabul');
+                        let renk = isGiris ? 'text-sky-600 bg-sky-50 border-sky-100' : 'text-orange-600 bg-orange-50 border-orange-100';
+                        let ikon = isGiris ? '📥' : '📤';
+                        
+                        let miktarGosterim = Number(parseFloat(kayit.miktar).toFixed(2));
+                        
+                        let html = `
+                        <div class="flex justify-between items-center p-3 rounded-xl border ${renk} shadow-sm">
+                            <div class="overflow-hidden mr-2">
+                                <span class="block font-black text-sm truncate">${ikon} ${miktarGosterim} ${kayit.birim} <span class="text-[10px] text-gray-500 ml-2 uppercase font-bold">${kayit.tur}</span></span>
+                                <span class="block text-[10px] font-bold text-gray-600 mt-1 truncate">
+                                    Sorumlu: <b class="text-gray-800">${kayit.kisi}</b> 
+                                    <span class="mx-2 text-gray-300">|</span> 
+                                    Aksiyon: <span class="text-gray-700">${kayit.notlar}</span>
+                                </span>
+                            </div>
+                            <div class="text-right shrink-0">
+                                <span class="block text-xs font-black text-gray-800">${kayit.tarih.substring(0, 10)}</span>
+                                <span class="block text-[10px] font-bold text-gray-400">${kayit.tarih.length > 10 ? kayit.tarih.substring(11, 16) : ''}</span>
+                            </div>
+                        </div>`;
+                        container.innerHTML += html;
+                    });
+                })
+                .catch(err => {
+                    container.innerHTML = '<div class="text-center py-4 text-red-500 font-bold text-xs">Bağlantı hatası oluştu.</div>';
+                });
+        }
+
+        function closeDondurucuModal() {
+            const m = document.getElementById('dondurucuModal');
+            const b = document.getElementById('dondurucuModalBox');
+            m.classList.remove('opacity-100'); b.classList.remove('scale-100');
+            setTimeout(() => { m.classList.add('hidden'); }, 300);
+        }
+    </script>
 </body>
 </html>

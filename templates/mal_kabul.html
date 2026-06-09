@@ -46,10 +46,23 @@
                     <input type="hidden" name="islem_tipi" value="ekle">
                     
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
-                        <div class="lg:col-span-2">
-                            <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Ürün Adı</label>
-                            <input type="text" name="urun_adi" required placeholder="Örn: Osmancık Pirinç" class="w-full bg-gray-50 border border-gray-200 p-3.5 rounded-xl text-sm font-bold text-gray-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition">
+                        <div class="lg:col-span-2 relative">
+                            <div class="flex justify-between items-end mb-1.5">
+                                <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Ürün Adı</label>
+                                <span id="yeniUrunUyari" class="hidden text-[9px] bg-amber-100 text-amber-700 font-black px-2 py-0.5 rounded uppercase tracking-widest animate-pulse">
+                                    ⚠️ Yeni Ürün Olarak Eklenecek
+                                </span>
+                            </div>
+                            
+                            <input type="text" id="urunAdiInput" name="urun_adi" required placeholder="Örn: Osmancık Pirinç" autocomplete="off" list="depoUrunListesi" oninput="urunKontrolEt()" class="w-full bg-gray-50 border border-gray-200 p-3.5 rounded-xl text-sm font-bold text-gray-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition">
+                            
+                            <datalist id="depoUrunListesi">
+                                {% for u in depo_urunleri %}
+                                    <option value="{{ u }}">
+                                {% endfor %}
+                            </datalist>
                         </div>
+                        
                         <div>
                             <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Miktar</label>
                             <input type="number" step="0.01" name="miktar" required placeholder="0.00" class="w-full bg-gray-50 border border-gray-200 p-3.5 rounded-xl text-sm font-black text-emerald-600 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition">
@@ -293,5 +306,62 @@
             document.getElementById('aksiyonFormu').submit();
         }
     </script>
+    <script>
+    // Python'dan gelen ürün listesini JavaScript'e aktarıyoruz
+    const mevcutUrunler = [{% for u in depo_urunleri %}"{{ u|lower }}",{% endfor %}];
+
+    function urunKontrolEt() {
+        const input = document.getElementById('urunAdiInput');
+        const uyari = document.getElementById('yeniUrunUyari');
+        const yazilan = input.value.trim().toLowerCase();
+
+        // Eğer input boşsa uyarıyı gizle
+        if (yazilan === "") {
+            uyari.classList.add('hidden');
+            input.classList.remove('border-amber-400', 'ring-amber-100', 'focus:border-amber-500');
+            return;
+        }
+
+        // Yazılan ürün listemizde YOKSA (Yepyeni bir ürünse)
+        if (!mevcutUrunler.includes(yazilan)) {
+            uyari.classList.remove('hidden');
+            // Input çerçevesini dikkat çekici Turuncu/Sarı yap
+            input.classList.add('border-amber-400', 'ring-amber-100', 'focus:border-amber-500');
+            input.classList.remove('focus:border-emerald-500', 'focus:ring-emerald-100');
+        } else {
+            // Ürün depoda VARSA (Her şey yolundaysa)
+            uyari.classList.add('hidden');
+            input.classList.remove('border-amber-400', 'ring-amber-100', 'focus:border-amber-500');
+            input.classList.add('focus:border-emerald-500', 'focus:ring-emerald-100');
+        }
+    }
+
+    // Formu Göndermeden Önceki Son Kontrol Kalkanı
+    function formKontrol(event) {
+        const uyariGizlimi = document.getElementById('yeniUrunUyari').classList.contains('hidden');
+        const urunAdi = document.getElementById('urunAdiInput').value.trim();
+        
+        // Eğer uyarı etiketi ekranda görünüyorsa (yani ürün yeni bir ürünse)
+        if (!uyariGizlimi && urunAdi !== "") {
+            const onay = confirm("⚠️ DİKKAT!\n\n'" + urunAdi + "' isminde bir ürün şu an depoda YER ALMIYOR.\nBu ürünü depoya SIFIRDAN YENİ BİR ÜRÜN olarak kaydetmek istediğinize emin misiniz?\n\nEğer harf hatası (Örn: Kiyma yerine Kıyma) yaptıysanız 'İptal'e basıp düzeltin.");
+            
+            if (!onay) {
+                event.preventDefault(); // Formun gönderilmesini durdur
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // Mal Kabul formuna güvenlik kalkanını bağlıyoruz
+    document.addEventListener("DOMContentLoaded", function() {
+        // Formun ID'si veya yapısına göre burayı hedefliyoruz.
+        // Eğer formunun özel bir ID'si yoksa sayfadaki formları tarayıp buluruz.
+        const malKabulForm = document.querySelector("form[action='/mal-kabul']");
+        if(malKabulForm) {
+            malKabulForm.addEventListener('submit', formKontrol);
+        }
+    });
+</script>
 </body>
 </html>
