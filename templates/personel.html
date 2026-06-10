@@ -180,18 +180,30 @@
                 
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 border-b border-slate-100 pb-6">
                     <div>
-                        <h3 class="font-black text-slate-800 text-xl">Yoklama Listesi</h3>
+                        <h3 class="font-black text-slate-800 text-xl flex items-center gap-2">
+                            Yoklama Listesi 
+                            {% if not yoklama_kaydedilmis_mi %}
+                                <span class="bg-rose-100 text-rose-600 text-[9px] px-2 py-0.5 rounded-full uppercase tracking-widest animate-pulse">Henüz Kaydedilmedi!</span>
+                            {% else %}
+                                <span class="bg-emerald-100 text-emerald-600 text-[9px] px-2 py-0.5 rounded-full uppercase tracking-widest">Kaydedildi</span>
+                            {% endif %}
+                        </h3>
                         <p class="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">Tarih seçerek geçmişe dönük işlem yapabilirsiniz.</p>
                     </div>
                     
                     <div class="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
-                        <form action="/personel" method="GET" class="m-0 flex items-center bg-slate-50 p-2 rounded-xl border border-slate-200 w-full sm:w-auto justify-between shadow-sm">
-                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3 mr-2">Tarih:</label>
-                            <input type="date" name="tarih" value="{{ secilen_tarih }}" class="border-none bg-white py-1.5 px-3 rounded-lg text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-400 shadow-sm cursor-pointer text-indigo-700 transition" onchange="this.form.submit()">
+                        <form action="/personel" method="GET" class="m-0 flex flex-wrap sm:flex-nowrap items-center bg-slate-50 p-2 rounded-xl border border-slate-200 w-full sm:w-auto justify-between shadow-sm gap-2">
+                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 hidden sm:block">Tarih:</label>
+                            <input type="date" name="tarih" value="{{ secilen_tarih }}" class="flex-1 border border-slate-200 bg-white py-2 px-3 rounded-lg text-xs font-bold outline-none focus:ring-2 focus:border-indigo-400 shadow-sm cursor-pointer text-slate-700 transition">
+                            <button type="submit" class="w-full sm:w-auto bg-slate-800 text-white font-black px-4 py-2 rounded-lg text-[10px] uppercase tracking-widest hover:bg-slate-900 transition shadow-sm">
+                                Git ➔
+                            </button>
                         </form>
                         
                         <div class="flex items-center gap-2 w-full sm:w-auto">
-                            <button type="button" onclick="openDokumModal()" class="w-full sm:w-auto bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-6 py-3.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-sm transition shrink-0 flex items-center justify-center gap-2">
+                            <button type="button" 
+                                onclick="{% if yoklama_kaydedilmis_mi %}openDokumModal(){% else %}alert('⚠️ DİKKAT!\n\nDöküm almadan veya yazdırmadan önce lütfen bu tarihin yoklamasını LİSTEYİ KAYDET butonuna basarak sisteme işleyiniz.');{% endif %}" 
+                                class="w-full sm:w-auto bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-6 py-3.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-sm transition shrink-0 flex items-center justify-center gap-2">
                                 🖨️ DÖKÜM AL
                             </button>
                             <button form="yoklamaForm" type="submit" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-md transition shrink-0">

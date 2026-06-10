@@ -29,6 +29,7 @@
             const activeBtn = document.getElementById('btn-' + tabId);
             activeBtn.classList.remove('bg-white', 'text-slate-500', 'hover:bg-slate-50');
             activeBtn.classList.add('bg-indigo-600', 'text-white', 'shadow-md');
+            localStorage.setItem('satisSekme', tabId);
         }
 
         function searchRecipe() {
@@ -39,6 +40,73 @@
                 card.style.display = title.includes(input) ? "block" : "none";
             });
         }
+
+        // 🚀 MUCİZEVİ SESSİZ GÖNDERİM MOTORU (Sayfa Yenilenmesini Engeller)
+        async function sessizGonder(event, form, confirmMsg = null) {
+            event.preventDefault(); 
+            
+            if (confirmMsg && !confirm(confirmMsg)) {
+                return false;
+            }
+            
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if(submitBtn) {
+                submitBtn.dataset.originalText = submitBtn.innerHTML;
+                submitBtn.innerHTML = '⏳...';
+                submitBtn.style.opacity = '0.7';
+                submitBtn.disabled = true;
+            }
+
+            try {
+                const activeTab = localStorage.getItem('satisSekme') || 'tab-gunluk-uretim';
+                const scrollY = window.scrollY;
+                
+                let openDetails = [];
+                document.querySelectorAll('[id^="details-"]').forEach(el => {
+                    if (!el.classList.contains('hidden')) openDetails.push(el.id);
+                });
+
+                const response = await fetch(form.action, {
+                    method: form.method,
+                    body: new FormData(form)
+                });
+                
+                const html = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                
+                // Ana içeriği göz kırpmadan arka planda değiştirir
+                document.getElementById('main-content-area').innerHTML = doc.getElementById('main-content-area').innerHTML;
+                
+                // Kullanıcı deneyimini (açık sayfalar, sekmeler, scroll) korur
+                switchTab(activeTab);
+                window.scrollTo(0, scrollY);
+                
+                openDetails.forEach(id => {
+                    let el = document.getElementById(id);
+                    if(el) {
+                        el.classList.remove('hidden');
+                        let iconId = id.replace('details-', 'chevron-');
+                        let icon = document.getElementById(iconId);
+                        if(icon) icon.classList.add('rotate-180');
+                    }
+                });
+                
+            } catch (error) {
+                console.error("Hata:", error);
+                alert("İşlem sırasında hata oluştu!");
+                if(submitBtn) {
+                    submitBtn.innerHTML = submitBtn.dataset.originalText;
+                    submitBtn.style.opacity = '1';
+                    submitBtn.disabled = false;
+                }
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const aktifSekme = localStorage.getItem('satisSekme') || 'tab-gunluk-uretim';
+            switchTab(aktifSekme);
+        });
     </script>
 </head>
 <body class="bg-slate-50 flex min-h-screen font-sans text-slate-800">
@@ -111,7 +179,7 @@
                         <p class="text-[11px] text-slate-400 font-bold mb-6 uppercase tracking-widest">Planlama sonrası depodan malzeme çıkışı yapılmalıdır</p>
                     </div>
                     
-                    <form action="/uretim" method="POST" class="flex flex-col gap-4">
+                    <form action="/uretim" method="POST" class="flex flex-col gap-4" onsubmit="return sessizGonder(event, this);">
                         <input type="hidden" name="islem_tipi" value="manuel_yemek_ekle">
                         <input type="hidden" name="mevcut_tarih" value="{{ secilen_tarih }}">
                         <input type="hidden" name="mevcut_ogun" value="{{ secilen_ogun }}">
@@ -160,7 +228,7 @@
                     </h3>
                     <p class="text-[11px] text-sky-700 font-bold mb-5 relative z-10 uppercase tracking-widest">Mevcut Depo Stoğu: <b class="text-base ml-1 text-sky-900">{{ icecek_miktar }} Adet</b></p>
                     
-                    <form action="/uretim" method="POST" class="flex flex-col sm:flex-row gap-3 relative z-10" onsubmit="return confirm('İçecekler toplu olarak stoktan düşülecek. Onaylıyor musunuz?');">
+                    <form action="/uretim" method="POST" class="flex flex-col sm:flex-row gap-3 relative z-10" onsubmit="return sessizGonder(event, this, 'İçecekler toplu olarak stoktan düşülecek. Onaylıyor musunuz?');">
                         <input type="hidden" name="islem_tipi" value="hizli_icecek_dus"><input type="hidden" name="mevcut_tarih" value="{{ secilen_tarih }}"><input type="hidden" name="mevcut_ogun" value="{{ secilen_ogun }}">
                         <input type="number" name="icecek_miktar" placeholder="Dağıtılan (Adet)" required class="flex-1 border border-sky-200 p-3 rounded-xl font-bold bg-white outline-none text-center focus:border-sky-400 min-w-0 transition shadow-inner">
                         <button type="submit" class="w-full sm:w-auto bg-sky-600 text-white font-black px-6 py-3 rounded-xl text-[11px] uppercase tracking-widest hover:bg-sky-700 shadow-sm shrink-0 transition">Stoktan Düş</button>
@@ -190,7 +258,7 @@
                             
                             <div class="w-full border-t border-slate-200 pt-3 mt-auto flex flex-col gap-2">
                                 
-                                <form action="/uretim" method="POST" class="w-full flex items-center gap-1 bg-indigo-50/50 p-1.5 rounded-lg border border-indigo-100">
+                                <form action="/uretim" method="POST" class="w-full flex items-center gap-1 bg-indigo-50/50 p-1.5 rounded-lg border border-indigo-100" onsubmit="return sessizGonder(event, this);">
                                     <input type="hidden" name="islem_tipi" value="ekstra_kullanim">
                                     <input type="hidden" name="mevcut_tarih" value="{{ secilen_tarih }}">
                                     <input type="hidden" name="mevcut_ogun" value="{{ secilen_ogun }}">
@@ -208,7 +276,7 @@
                                 </form>
 
                                 <div class="flex gap-2 w-full mt-1">
-                                    <form action="/uretim" method="POST" class="w-1/2" onsubmit="return confirm('Bu malzemeyi Ana Depoya geri iade ediyorsunuz. Onaylıyor musunuz?');">
+                                    <form action="/uretim" method="POST" class="w-1/2" onsubmit="return sessizGonder(event, this, 'Bu malzemeyi Ana Depoya geri iade ediyorsunuz. Onaylıyor musunuz?');">
                                         <input type="hidden" name="islem_tipi" value="mutfaktan_direkt_iade"><input type="hidden" name="mevcut_tarih" value="{{ secilen_tarih }}"><input type="hidden" name="mevcut_ogun" value="{{ secilen_ogun }}"><input type="hidden" name="malzeme_adi" value="{{ m.malzeme_adi }}">
                                         <input type="hidden" name="iade_miktar" value="{{ m.mutfak_miktar }}">
                                         <button type="submit" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 p-2 rounded-lg font-black text-[9px] uppercase tracking-widest shadow-sm transition border border-slate-200">
@@ -297,7 +365,7 @@
                                                                 <div class="flex items-center gap-2">
                                                                     <span class="text-[9px] text-slate-400 font-bold">({{ m.gram }} {% if m.birim == 'ADET' %}Adet{% else %}g{% endif %})</span>
                                                                     {% if u.durum == 'Planlandı' %}
-                                                                    <form action="/uretim" method="POST" class="m-0">
+                                                                    <form action="/uretim" method="POST" class="m-0" onsubmit="return sessizGonder(event, this);">
                                                                         <input type="hidden" name="islem_tipi" value="recete_sil"><input type="hidden" name="recete_id" value="{{ m.id }}"><input type="hidden" name="mevcut_tarih" value="{{ secilen_tarih }}"><input type="hidden" name="mevcut_ogun" value="{{ secilen_ogun }}">
                                                                         <button type="submit" class="text-slate-300 hover:text-rose-500 transition"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                                                                     </form>
@@ -323,7 +391,7 @@
                                             </div>
                                             
                                             {% if u.durum == 'Planlandı' %}
-                                            <form action="/uretim" method="POST" class="flex flex-wrap sm:flex-nowrap gap-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                            <form action="/uretim" method="POST" class="flex flex-wrap sm:flex-nowrap gap-2 bg-slate-50 p-3 rounded-xl border border-slate-100" onsubmit="return sessizGonder(event, this);">
                                                 <input type="hidden" name="islem_tipi" value="recete_ekle"><input type="hidden" name="yemek_adi" value="{{ u.yemek_adi }}"><input type="hidden" name="mevcut_tarih" value="{{ secilen_tarih }}"><input type="hidden" name="mevcut_ogun" value="{{ secilen_ogun }}">
                                                 <input type="text" name="malzeme_adi" list="depoList" placeholder="Malzeme Seç..." required class="border border-slate-200 p-2 rounded-lg text-xs font-bold outline-none flex-1 min-w-0 bg-white focus:border-indigo-400 transition">
                                                 <input type="number" step="0.01" name="miktar_gram" placeholder="Gr / Adet" required class="border border-slate-200 p-2 rounded-lg text-xs font-bold outline-none w-28 shrink-0 text-center bg-white focus:border-indigo-400 transition">
@@ -335,7 +403,7 @@
 
                                         <div class="w-full lg:w-72 shrink-0 space-y-3">
                                             {% if u.durum == 'Planlandı' %}
-                                                <form action="/uretim" method="POST" class="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-inner">
+                                                <form action="/uretim" method="POST" class="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-inner" onsubmit="return sessizGonder(event, this);">
                                                     <input type="hidden" name="islem_tipi" value="uretime_gonder"><input type="hidden" name="uretim_id" value="{{ u.id }}"><input type="hidden" name="mevcut_tarih" value="{{ secilen_tarih }}"><input type="hidden" name="mevcut_ogun" value="{{ secilen_ogun }}"><input type="hidden" name="yemek_adi" value="{{ u.yemek_adi }}"><input type="hidden" name="ogun" value="{{ u.ogun }}"><input type="hidden" name="kategori" value="{{ u.kategori }}">
                                                     <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Hedef Porsiyon</label>
                                                     <div class="flex gap-2">
@@ -344,13 +412,13 @@
                                                     </div>
                                                 </form>
 
-                                                <form action="/uretim" method="POST" class="m-0 text-center pt-2" onsubmit="return confirm('Bu yemeği planlardan silmek istediğinize emin misiniz?');">
+                                                <form action="/uretim" method="POST" class="m-0 text-center pt-2" onsubmit="return sessizGonder(event, this, 'Bu yemeği planlardan silmek istediğinize emin misiniz?');">
                                                     <input type="hidden" name="islem_tipi" value="uretim_sil"><input type="hidden" name="uretim_id" value="{{ u.id }}"><input type="hidden" name="mevcut_tarih" value="{{ secilen_tarih }}"><input type="hidden" name="mevcut_ogun" value="{{ secilen_ogun }}">
                                                     <button type="submit" class="text-[10px] text-slate-400 hover:text-rose-500 font-bold transition flex items-center justify-center gap-1 mx-auto uppercase tracking-widest">Menüden Çıkar</button>
                                                 </form>
                                             
                                             {% elif u.durum == 'Üretimde' %}
-                                                <form action="/uretim" method="POST" class="bg-sky-50 p-4 rounded-xl border border-sky-200 shadow-inner">
+                                                <form action="/uretim" method="POST" class="bg-sky-50 p-4 rounded-xl border border-sky-200 shadow-inner" onsubmit="return sessizGonder(event, this);">
                                                     <input type="hidden" name="islem_tipi" value="gun_sonu"><input type="hidden" name="uretim_id" value="{{ u.id }}"><input type="hidden" name="mevcut_tarih" value="{{ secilen_tarih }}"><input type="hidden" name="mevcut_ogun" value="{{ secilen_ogun }}">
                                                     <label class="block text-[10px] font-black text-sky-700 uppercase tracking-widest mb-2">
                                                         {% if u.ogun == '❄️ Donmuş Hazırlık' %}Dondurucuya Atılan (Porsiyon){% else %}Dağıtılan (Servis Edilen){% endif %}
@@ -360,7 +428,7 @@
                                                         <button type="submit" class="bg-sky-600 text-white text-[10px] uppercase font-black px-4 py-2 rounded-xl hover:bg-sky-700 shadow-md shrink-0 transition">Bitir</button>
                                                     </div>
                                                 </form>
-                                                <form action="/uretim" method="POST" class="m-0 text-center pt-2" onsubmit="return confirm('DİKKAT: Üretimi iptal ederseniz yemek tekrar planlama aşamasına döner. Emin misiniz?');">
+                                                <form action="/uretim" method="POST" class="m-0 text-center pt-2" onsubmit="return sessizGonder(event, this, 'DİKKAT: Üretimi iptal ederseniz yemek tekrar planlama aşamasına döner. Emin misiniz?');">
                                                     <input type="hidden" name="islem_tipi" value="uretim_iptal"><input type="hidden" name="uretim_id" value="{{ u.id }}"><input type="hidden" name="mevcut_tarih" value="{{ secilen_tarih }}"><input type="hidden" name="mevcut_ogun" value="{{ secilen_ogun }}">
                                                     <button type="submit" class="text-[10px] text-slate-400 hover:text-rose-500 font-bold transition uppercase tracking-widest">Üretimi İptal Et</button>
                                                 </form>
@@ -370,7 +438,7 @@
                                                     <span class="block text-emerald-700 font-black text-sm mb-3">
                                                         {% if u.ogun == '❄️ Donmuş Hazırlık' %}Dondurucuya Aktarıldı ❄️{% else %}Başarıyla Dağıtıldı ✅{% endif %}
                                                     </span>
-                                                    <form action="/uretim" method="POST" class="m-0" onsubmit="return confirm('İşlemi iptal edip tekrar üretim aşamasına almak istiyor musunuz?');">
+                                                    <form action="/uretim" method="POST" class="m-0" onsubmit="return sessizGonder(event, this, 'İşlemi iptal edip tekrar üretim aşamasına almak istiyor musunuz?');">
                                                         <input type="hidden" name="islem_tipi" value="gun_sonu_iptal"><input type="hidden" name="uretim_id" value="{{ u.id }}"><input type="hidden" name="mevcut_tarih" value="{{ secilen_tarih }}"><input type="hidden" name="mevcut_ogun" value="{{ secilen_ogun }}">
                                                         <button type="submit" class="text-[9px] text-slate-500 hover:text-slate-800 font-bold uppercase tracking-widest bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm w-full transition">Geri Al / Düzelt</button>
                                                     </form>
@@ -398,7 +466,7 @@
                     <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Bu sayı aşağıdaki porsiyon ve maliyet analizinde temel alınacaktır.</p>
                 </div>
                 
-                <form action="/uretim" method="POST" class="flex gap-3 items-center w-full md:w-auto">
+                <form action="/uretim" method="POST" class="flex gap-3 items-center w-full md:w-auto" onsubmit="return sessizGonder(event, this);">
                     <input type="hidden" name="islem_tipi" value="gunluk_kisi_kaydet">
                     <input type="hidden" name="mevcut_tarih" value="{{ secilen_tarih }}">
                     <input type="hidden" name="mevcut_ogun" value="{{ secilen_ogun }}">
@@ -415,7 +483,7 @@
                         <label class="text-[9px] font-black text-slate-400 uppercase block mb-1">Toplam</label>
                         <span class="font-black text-slate-800 text-lg">{{ toplam_gelen }}</span>
                     </div>
-                    <button type="submit" class="bg-indigo-600 text-white font-black px-6 py-3.5 rounded-xl text-[10px] uppercase tracking-widest hover:bg-indigo-700 shadow-sm transition ml-2 self-end sm:self-auto h-[46px]" onclick="setTimeout(()=>localStorage.setItem('satisSekme', 'tab-planlama'),10)">Güncelle</button>
+                    <button type="submit" class="bg-indigo-600 text-white font-black px-6 py-3.5 rounded-xl text-[10px] uppercase tracking-widest hover:bg-indigo-700 shadow-sm transition ml-2 self-end sm:self-auto h-[46px]">Güncelle</button>
                 </form>
             </div>
 
@@ -507,7 +575,7 @@
                     </div>
                 </div>
 
-                <form action="/uretim" method="POST" class="bg-indigo-50 border border-indigo-100 p-5 rounded-2xl mb-8 flex flex-col sm:flex-row gap-4 items-center">
+                <form action="/uretim" method="POST" class="bg-indigo-50 border border-indigo-100 p-5 rounded-2xl mb-8 flex flex-col sm:flex-row gap-4 items-center" onsubmit="return sessizGonder(event, this);">
                     <input type="hidden" name="islem_tipi" value="recete_arsiv_ekle">
                     <div class="flex items-center gap-3 shrink-0">
                         <div class="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-black">+</div>
@@ -535,7 +603,7 @@
                                     <span class="font-bold text-slate-700">{{ m.malzeme }}</span>
                                     <div class="flex items-center gap-3">
                                         <span class="text-indigo-600 font-black">{{ m.miktar|int if m.miktar % 1 == 0 else m.miktar }} <small class="text-[9px] text-slate-400">{{ m.birim }}</small></span>
-                                        <form action="/uretim" method="POST" class="m-0" onsubmit="return confirm('Bu malzemeyi kalıcı olarak reçeteden silmek istiyor musunuz?');">
+                                        <form action="/uretim" method="POST" class="m-0" onsubmit="return sessizGonder(event, this, 'Bu malzemeyi kalıcı olarak reçeteden silmek istiyor musunuz?');">
                                             <input type="hidden" name="islem_tipi" value="recete_arsiv_sil">
                                             <input type="hidden" name="recete_id" value="{{ m.id }}">
                                             <button type="submit" class="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -547,7 +615,7 @@
                         </div>
 
                         <div class="p-4 border-t border-slate-100 bg-white">
-                            <form action="/uretim" method="POST" class="flex gap-2">
+                            <form action="/uretim" method="POST" class="flex gap-2" onsubmit="return sessizGonder(event, this);">
                                 <input type="hidden" name="islem_tipi" value="recete_arsiv_ekle">
                                 <input type="hidden" name="yemek_adi" value="{{ yemek_adi }}">
                                 <input type="text" name="malzeme_adi" list="depoList" placeholder="Yeni Malzeme..." required class="flex-1 w-full border-2 border-slate-100 p-2 rounded-xl text-xs font-bold bg-slate-50 outline-none focus:border-indigo-400 min-w-0">
@@ -569,5 +637,5 @@
     </div>
 
     <datalist id="depoList">{% for dm in depo_malzemeler %}<option value="{{ dm.urun_adi }}">{% endfor %}</datalist>
-    </body>
+</body>
 </html>

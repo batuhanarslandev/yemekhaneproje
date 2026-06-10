@@ -1879,45 +1879,6 @@ def et_secmeli_lot_sil():
     flash(f"🧹 Başarılı: Seçtiğiniz {silinen_sayisi} adet karkas lotu sistemden tamamen silindi.", "success")
     return redirect(url_for('et_isleme'))
 
-@app.route('/yedek-uretim', methods=['GET', 'POST'])
-@login_required
-@admin_required
-def yedek_uretim():
-    conn = get_db_connection()
-    bugun = date.today().strftime('%Y-%m-%d')
-    if request.method == 'POST':
-        islem = request.form.get('islem_tipi')
-        if islem == 'yedek_ekle':
-            y_adi = request.form['yemek_adi']; pors = int(request.form['porsiyon']); islem_tarihi = request.form.get('islem_tarihi', bugun)
-            recete = conn.execute('SELECT * FROM receteler WHERE yemek_adi = ?', (y_adi,)).fetchall()
-            if not recete: flash(f"HATA: '{y_adi}' reçetesi yok!", "error")
-            else:
-                yeterli_stok = True; dus_malz = []; hata = []
-                for r in recete:
-                    depo_malz = conn.execute("SELECT * FROM depo WHERE urun_adi COLLATE NOCASE = ?", (r['malzeme_adi'],)).fetchone()
-                    birim = depo_malz['birim'] if depo_malz else 'KG'; oran = 1000 if birim.upper() in ['KG', 'LT'] else 1
-                    gereken = (r['miktar'] * pors) / oran
-                    if not depo_malz or depo_malz['miktar'] < gereken: hata.append(f"'{r['malzeme_adi']}'"); yeterli_stok = False
-                    else: dus_malz.append({'adi': r['malzeme_adi'], 'dusulecek': gereken, 'birim': birim})
-                if yeterli_stok:
-                    for dm in dus_malz:
-                        conn.execute('UPDATE depo SET miktar = miktar - ? WHERE urun_adi COLLATE NOCASE = ?', (dm['dusulecek'], dm['adi']))
-                        conn.execute("INSERT INTO depo_cikis (tarih, ogun, yemek_adi, malzeme_adi, miktar, birim, onay_durumu) VALUES (?,?,?,?,?,?,'Onaylandı')", (islem_tarihi, 'Diğer', f"DONDURUCU İMALAT: {y_adi}", dm['adi'], dm['dusulecek'], dm['birim']))
-                    mevcut = conn.execute('SELECT id FROM yedek_stok WHERE yemek_adi=?', (y_adi,)).fetchone()
-                    if mevcut: conn.execute('UPDATE yedek_stok SET porsiyon = porsiyon + ? WHERE id=?', (pors, mevcut['id']))
-                    else: conn.execute('INSERT INTO yedek_stok (yemek_adi, porsiyon) VALUES (?,?)', (y_adi, pors))
-                    flash(f"Başarılı! Stoktan düşüldü ve dondurucuya aktarıldı.", "success")
-                else: flash("STOK EKSİK: " + " | ".join(hata), "error")
-            conn.commit()
-        elif islem == 'yedek_dus':
-            conn.execute('UPDATE yedek_stok SET porsiyon = porsiyon - ? WHERE yemek_adi=?', (int(request.form['dusulecek_porsiyon']), request.form['yemek_adi'])); conn.commit(); flash("Kullanım depodan başarıyla düşüldü.", "success")
-        elif islem == 'yedek_sil':
-            conn.execute('DELETE FROM yedek_stok WHERE id=?', (request.form['yedek_id'],)); conn.commit()
-        return redirect(url_for('yedek_uretim'))
-    yedekler = conn.execute('SELECT * FROM yedek_stok ORDER BY porsiyon DESC').fetchall()
-    tum_yemekler = conn.execute('SELECT DISTINCT yemek_adi FROM receteler ORDER BY yemek_adi').fetchall(); conn.close()
-    return render_template('yedek_uretim.html', yedekler=yedekler, tum_yemekler=tum_yemekler, bugun=bugun)
-
 @app.route('/ihtar-tutanak', methods=['GET', 'POST'])
 @login_required
 @admin_required
@@ -2400,8 +2361,11 @@ def personel():
     ihtarlar_raw = conn.execute('''SELECT i.*, p.ad_soyad, p.gorev FROM personel_ihtarlar i JOIN personeller p ON i.personel_id = p.id ORDER BY i.durum ASC, i.son_tarih ASC''').fetchall()
     ihtarlar = [dict(row) for row in ihtarlar_raw]
 
+    # YENİ: Seçilen güne ait yoklama daha önce sisteme hiç işlenmiş mi kontrolü
+    yoklama_kaydedilmis_mi = len(bugunku_yoklama_db) > 0
+
     conn.close()
-    return render_template('personel.html', personeller=personeller, bugunku_izinler_detay=bugunku_izinler_detay, tum_izinler=tum_izinler, izinli_idler=izinli_idler, secilen_izinli_idler=secilen_izinli_idler, yoklama_dict=yoklama_dict, bugun=bugun, secilen_tarih=secilen_tarih, gec_kalan_sayisi=gec_kalan_sayisi, gelmeyen_sayisi=gelmeyen_sayisi, ihtarlar=ihtarlar, secilen_izinler_dict=secilen_izinler_dict)
+    return render_template('personel.html', personeller=personeller, bugunku_izinler_detay=bugunku_izinler_detay, tum_izinler=tum_izinler, izinli_idler=izinli_idler, secilen_izinli_idler=secilen_izinli_idler, yoklama_dict=yoklama_dict, bugun=bugun, secilen_tarih=secilen_tarih, gec_kalan_sayisi=gec_kalan_sayisi, gelmeyen_sayisi=gelmeyen_sayisi, ihtarlar=ihtarlar, secilen_izinler_dict=secilen_izinler_dict, yoklama_kaydedilmis_mi=yoklama_kaydedilmis_mi)
 
 @app.route('/api/urun-gecmisi/<int:urun_id>')
 @login_required
