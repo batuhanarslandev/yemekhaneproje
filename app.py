@@ -1688,28 +1688,44 @@ def satis():
 
         return redirect(url_for('satis', tarih=request.form.get('islem_tarihi', secilen_tarih), f_kampus=f_kampus, f_fiyat=f_fiyat, f_tahsilat=f_tahsilat))
 
+    # 1. SATIŞ & TAHSİLAT: Kırmızı (Tahsilat Bekleyen) -> Sarı (Firma Bekleyen) -> Yeşil (Bitenler)
     dis_paydaslar = conn.execute("""
         SELECT * FROM dis_paydas_satis
-        WHERE tarih LIKE ?
-        ORDER BY tarih DESC, id DESC
-    """, (f"{mevcut_ay}%",)).fetchall()
+        ORDER BY 
+            CASE 
+                WHEN tahsilat_durumu LIKE '%⏳%' OR tahsilat_durumu LIKE '%🏛️%' THEN 1 
+                WHEN firma_odeme_durumu LIKE '%⏳%' THEN 2 
+                ELSE 3 
+            END ASC,
+            tarih DESC, id DESC
+    """).fetchall()
 
-    etkinlikler = conn.execute('SELECT * FROM etkinlikler ORDER BY id DESC').fetchall()
+    # 2. ETKİNLİK PLANLAMA: Planlananlar üstte, Aktarılanlar altta ve tarihe göre
+    etkinlikler = conn.execute("""
+        SELECT * FROM etkinlikler 
+        ORDER BY 
+            CASE WHEN durum = 'Planlandı' THEN 1 ELSE 2 END ASC, 
+            tarih DESC
+    """).fetchall()
     
-    # Lokma listesini çek
+    # 3. LOKMA DAĞITIMLARI: Tarihe göre en yeniler üstte
     lokmalar = conn.execute("SELECT * FROM lokma_dagitimlari ORDER BY tarih DESC").fetchall()
-
     query = "SELECT * FROM dis_paydas_satis WHERE tarih LIKE ?"
     params = [f"{mevcut_ay}%"]
 
-    if f_tahsilat == 'Tümü':
-        query += " AND (tahsilat_durumu LIKE '✅%' OR tahsilat_durumu LIKE '🎁%') AND (firma_odeme_durumu LIKE '✅%' OR firma_odeme_durumu LIKE '❌%')"
-    elif f_tahsilat == 'Vakıf': query += " AND tahsilat_durumu LIKE ?"; params.append("%Vakıf%")
-    elif f_tahsilat == 'Ödendi': query += " AND tahsilat_durumu LIKE ?"; params.append("%Ödendi%")
-    elif f_tahsilat == 'Bekliyor': query += " AND tahsilat_durumu LIKE ? AND tahsilat_durumu NOT LIKE ?"; params.append("%Bekliyor%"); params.append("%Vakıf%")
+    # YENİ: Bilanço sekmesinde Kırmızı/Sarı/Yeşil filtre motoru
+    if f_tahsilat == 'Yeşil':
+        query += " AND (tahsilat_durumu LIKE '%✅%' OR tahsilat_durumu LIKE '%🎁%') AND (firma_odeme_durumu LIKE '%✅%' OR firma_odeme_durumu LIKE '%❌%')"
+    elif f_tahsilat == 'Sarı':
+        query += " AND (tahsilat_durumu LIKE '%✅%' OR tahsilat_durumu LIKE '%🎁%') AND firma_odeme_durumu LIKE '%⏳%'"
+    elif f_tahsilat == 'Kırmızı':
+        query += " AND (tahsilat_durumu LIKE '%⏳%' OR tahsilat_durumu LIKE '%🏛️%')"
 
     if f_kampus != 'Tümü': query += " AND kampus = ?"; params.append(f_kampus)
     if f_fiyat != 'Tümü': query += " AND tarife = ?"; params.append(f"{f_fiyat} TL")
+    
+    # Tarihe göre sıralı çekilir
+    query += " ORDER BY tarih DESC"
 
     gelenler_aylik = conn.execute(query, params).fetchall()
     conn.close()

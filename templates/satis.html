@@ -99,9 +99,6 @@
                     <h1 class="text-3xl font-black text-slate-800 tracking-tight">💰 Finans & Planlama Paneli</h1>
                     <p class="text-slate-500 font-medium mt-2 text-sm">Resmi yazışmalı organizasyonlar ve fatura / tahsilat takibi.</p>
                 </div>
-                <form action="/satis" method="GET" class="flex gap-2 bg-white p-2 rounded-xl shadow-sm border border-slate-200 w-full md:w-auto">
-                    <input type="date" name="tarih" value="{{ secilen_tarih }}" class="flex-1 border-none rounded-lg p-2 font-bold text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-400" onchange="this.form.submit()">
-                </form>
             </div>
         </div>
 
@@ -209,7 +206,8 @@
                                 {% for d in dis_paydaslar %}
                                 {% set is_t_ok = '✅' in d.tahsilat_durumu or '🎁' in d.tahsilat_durumu %}
                                 {% set is_f_ok = '✅' in d.firma_odeme_durumu or '❌' in d.firma_odeme_durumu %}
-                                <tr class="hover:bg-slate-50/50 transition {% if loop.index > 5 %}satis-gizli hidden{% endif %}">
+                                
+                                <tr class="hover:bg-slate-50/50 transition {% if loop.index > 6 %}satis-gizli hidden{% endif %}">
                                     <td class="p-5">
                                         <div class="font-black text-slate-800 text-base mb-1 flex items-center gap-2">
                                             {{ d.adi }}
@@ -220,7 +218,7 @@
                                         <div class="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
                                             <span class="bg-slate-100 px-2 py-1 rounded border border-slate-200">{{ d.kampus }}</span>
                                             <span class="bg-slate-100 px-2 py-1 rounded border border-slate-200">{{ d.ogun }}</span>
-                                            <span class="bg-indigo-50 text-indigo-600 border border-indigo-100 px-2 py-1 rounded">Top: {{ d.kisi_sayisi }} Kişi</span>
+                                            <span class="bg-indigo-50 text-indigo-600 border border-indigo-100 px-2 py-1 rounded">{{ d.tarih }} | Top: {{ d.kisi_sayisi }} Kişi</span>
                                         </div>
                                         {% if d.odeme_yontemi and d.odeme_yontemi != '-' %}
                                         <div class="text-[9px] text-slate-500 font-bold max-w-sm whitespace-normal break-words bg-white p-2 rounded border border-slate-100">
@@ -262,9 +260,9 @@
                                 <tr><td colspan="4" class="p-10 text-center font-bold text-slate-400 text-xs uppercase tracking-widest">Açık hesap kaydı bulunmuyor.</td></tr>
                                 {% endfor %}
 
-                                {% if dis_paydaslar|length > 5 %}
+                                {% if dis_paydaslar|length > 6 %}
                                 <tr id="satis-show-more">
-                                    <td colspan="4" class="p-4 text-center">
+                                    <td colspan="4" class="p-4 text-center border-t border-slate-100">
                                         <button type="button" onclick="document.querySelectorAll('.satis-gizli').forEach(el => el.classList.remove('hidden')); this.closest('tr').remove();" class="bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 font-black text-[10px] px-6 py-3 rounded-xl uppercase tracking-widest transition shadow-sm">
                                             Daha Fazlasını Gör (Toplam {{ dis_paydaslar|length }} Kayıt) ⬇️
                                         </button>
@@ -335,7 +333,7 @@
                             
                             <tbody class="divide-y divide-slate-50">
                                 {% for e in etkinlikler %}
-                                <tr class="hover:bg-slate-50/50 transition {% if loop.index > 5 %}etkinlik-gizli hidden{% endif %}">
+                                <tr class="hover:bg-slate-50/50 transition {% if loop.index > 6 %}etkinlik-gizli hidden{% endif %}">
                                     <td class="p-5">
                                         <span class="block font-black text-slate-800 text-base mb-1">{{ e.adi }}</span>
                                         <div class="flex items-center gap-2">
@@ -355,14 +353,10 @@
                                             <span class="bg-emerald-50 text-emerald-600 font-black px-3 py-1.5 rounded-lg text-[9px] uppercase border border-emerald-100 shadow-sm">✅ Aktarıldı</span>
                                         {% endif %}
                                     </td>
-                                    
                                     <td class="p-5 text-right">
                                         <div class="flex items-center justify-end gap-1.5">
                                             {% if e.durum == 'Planlandı' %}
-                                            <button onclick="openTransferModal('{{ e.id }}', '{{ e.adi }}', '{{ e.tarih }}', '{{ e.kampus }}', '{{ e.kisi_sayisi }}')" 
-                                                class="bg-white text-indigo-600 hover:bg-indigo-50 font-black px-3 py-2 rounded-lg transition shadow-sm text-[9px] border border-indigo-200 uppercase tracking-widest whitespace-nowrap">
-                                                ✅ Ödemeye Aktar
-                                            </button>
+                                            <button onclick="openTransferModal('{{ e.id }}', '{{ e.adi }}', '{{ e.tarih }}', '{{ e.kampus }}', '{{ e.kisi_sayisi }}')" class="bg-white text-indigo-600 hover:bg-indigo-50 font-black px-3 py-2 rounded-lg transition shadow-sm text-[9px] border border-indigo-200 uppercase tracking-widest whitespace-nowrap">✅ Ödemeye Aktar</button>
                                             {% endif %}
                                             <form action="/satis" method="POST" class="m-0" onsubmit="return confirm('İptal edip Ajanda\'dan silmek istediğinize emin misiniz?');">
                                                 <input type="hidden" name="islem_tipi" value="etkinlik_sil"><input type="hidden" name="etkinlik_id" value="{{ e.id }}">
@@ -374,6 +368,16 @@
                                 {% else %}
                                 <tr><td colspan="5" class="p-10 text-center font-bold text-slate-400 text-xs uppercase tracking-widest">Planlanan bir etkinlik bulunmuyor.</td></tr>
                                 {% endfor %}
+                                
+                                {% if etkinlikler|length > 6 %}
+                                <tr id="etkinlik-show-more">
+                                    <td colspan="5" class="p-4 text-center border-t border-slate-100">
+                                        <button type="button" onclick="document.querySelectorAll('.etkinlik-gizli').forEach(el => el.classList.remove('hidden')); this.closest('tr').remove();" class="bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 font-black text-[10px] px-6 py-3 rounded-xl uppercase tracking-widest transition shadow-sm">
+                                            Daha Fazlasını Gör (Toplam {{ etkinlikler|length }} Kayıt) ⬇️
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endif %}
                             </tbody>
                         </table>
                     </div>
@@ -435,7 +439,7 @@
                             </thead>
                             <tbody class="divide-y divide-slate-50">
                                 {% for l in lokmalar %}
-                                <tr class="hover:bg-amber-50/30 transition">
+                                <tr class="hover:bg-amber-50/30 transition {% if loop.index > 6 %}lokma-gizli hidden{% endif %}">
                                     <td class="p-5">
                                         <span class="block font-black text-slate-800 text-base mb-1">{{ l.kisi_firma_adi }}</span>
                                         <span class="text-[9px] bg-slate-100 border border-slate-200 px-2 py-1 rounded text-slate-500 font-bold uppercase tracking-widest">{{ l.kampus }}</span>
@@ -459,6 +463,16 @@
                                 {% else %}
                                 <tr><td colspan="4" class="p-10 text-center font-bold text-slate-400 text-xs uppercase tracking-widest">Kayıtlı lokma / ikram dağıtımı bulunmuyor.</td></tr>
                                 {% endfor %}
+
+                                {% if lokmalar|length > 6 %}
+                                <tr id="lokma-show-more">
+                                    <td colspan="4" class="p-4 text-center border-t border-slate-100">
+                                        <button type="button" onclick="document.querySelectorAll('.lokma-gizli').forEach(el => el.classList.remove('hidden')); this.closest('tr').remove();" class="bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 font-black text-[10px] px-6 py-3 rounded-xl uppercase tracking-widest transition shadow-sm">
+                                            Daha Fazlasını Gör (Toplam {{ lokmalar|length }} Kayıt) ⬇️
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endif %}
                             </tbody>
                         </table>
                     </div>
@@ -467,8 +481,33 @@
 
             <div id="tab-muhasebe" class="tab-content hidden space-y-6">
                 <div class="bg-slate-800 p-6 rounded-[2rem] shadow-sm border border-slate-700">
-                    <form method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end" onsubmit="localStorage.setItem('satisSekme', 'tab-muhasebe');">
-                        <input type="hidden" name="tarih" value="{{ secilen_tarih }}">
+                    <form method="GET" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end" onsubmit="localStorage.setItem('satisSekme', 'tab-muhasebe');">
+                        
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-2">📅 Bilanço Ayı</label>
+                            <div class="flex gap-2">
+                                <select id="ay_secici" class="w-2/3 bg-slate-900 border-none p-3 rounded-xl text-white text-xs font-bold outline-none ring-1 ring-slate-700 focus:ring-indigo-500 transition cursor-pointer" onchange="document.getElementById('gercek_tarih').value = document.getElementById('yil_secici').value + '-' + this.value">
+                                    <option value="01">Ocak</option><option value="02">Şubat</option><option value="03">Mart</option>
+                                    <option value="04">Nisan</option><option value="05">Mayıs</option><option value="06">Haziran</option>
+                                    <option value="07">Temmuz</option><option value="08">Ağustos</option><option value="09">Eylül</option>
+                                    <option value="10">Ekim</option><option value="11">Kasım</option><option value="12">Aralık</option>
+                                </select>
+                                <input type="number" id="yil_secici" class="w-1/3 bg-slate-900 border-none p-3 rounded-xl text-white text-xs font-bold outline-none ring-1 ring-slate-700 focus:ring-indigo-500 transition text-center" onchange="document.getElementById('gercek_tarih').value = this.value + '-' + document.getElementById('ay_secici').value">
+                            </div>
+                            <input type="hidden" name="tarih" id="gercek_tarih" value="{{ secilen_tarih[:7] }}">
+                            
+                            <script>
+                                // Sayfa yüklendiğinde seçili olan ayı ve yılı kutulara otomatik yerleştirir
+                                document.addEventListener("DOMContentLoaded", () => {
+                                    const parts = "{{ secilen_tarih[:7] }}".split("-");
+                                    if(parts.length === 2) {
+                                        document.getElementById("yil_secici").value = parts[0];
+                                        document.getElementById("ay_secici").value = parts[1];
+                                    }
+                                });
+                            </script>
+                        </div>
+
                         <div>
                             <label class="block text-[10px] font-black text-slate-400 uppercase mb-2">Kampüs Filtresi</label>
                             <select name="f_kampus" class="w-full bg-slate-900 border-none p-3 rounded-xl text-white text-xs font-bold outline-none ring-1 ring-slate-700 focus:ring-indigo-500 transition">
@@ -489,15 +528,15 @@
                             </select>
                         </div>
                         <div>
-                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-2">Tahsilat Durumu</label>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-2">Ödeme Filtresi</label>
                             <select name="f_tahsilat" class="w-full bg-slate-900 border-none p-3 rounded-xl text-white text-xs font-bold outline-none ring-1 ring-slate-700 focus:ring-indigo-500 transition">
-                                <option value="Tümü">Tümü (Sadece Kapanmışlar)</option>
-                                <option value="Vakıf" {% if f_tahsilat == 'Vakıf' %}selected{% endif %}>Sadece Vakıf Ödeyecekler</option>
-                                <option value="Ödendi" {% if f_tahsilat == 'Ödendi' %}selected{% endif %}>Ödemesi Alınanlar</option>
-                                <option value="Bekliyor" {% if f_tahsilat == 'Bekliyor' %}selected{% endif %}>Bekleyenler</option>
+                                <option value="Tümü">Tüm İşlemler</option>
+                                <option value="Yeşil" {% if f_tahsilat == 'Yeşil' %}selected{% endif %}>🟢 Tamamlananlar</option>
+                                <option value="Sarı" {% if f_tahsilat == 'Sarı' %}selected{% endif %}>🟡 Firma Ödemesi Bekleyen</option>
+                                <option value="Kırmızı" {% if f_tahsilat == 'Kırmızı' %}selected{% endif %}>🔴 Kurum Tahsilatı Bekleyen</option>
                             </select>
                         </div>
-                        <button type="submit" class="bg-indigo-600 text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest hover:bg-indigo-500 transition shadow-sm">Listeyi Güncelle</button>
+                        <button type="submit" class="bg-indigo-600 text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest hover:bg-indigo-500 transition shadow-sm">Uygula</button>
                     </form>
                 </div>
 
@@ -511,19 +550,41 @@
                                     <th class="p-5">Grup Adı</th>
                                     <th class="p-5 text-center">Kişi</th>
                                     <th class="p-5 text-center">Tarife</th>
-                                    <th class="p-5 text-right">Toplam Tutar</th>
+                                    <th class="p-5 text-center">Durum</th> <th class="p-5 text-right">Toplam Tutar</th>
                                     <th class="px-6 py-4 text-center">Belgeler & Dekontlar</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-50">
                                 {% set toplam_aylik = namespace(value=0) %}
                                 {% for g in gelenler_aylik %}
-                                <tr class="hover:bg-slate-50/50 transition">
+                                
+                                {% set is_t_ok = '✅' in g.tahsilat_durumu or '🎁' in g.tahsilat_durumu %}
+                                {% set is_f_ok = '✅' in g.firma_odeme_durumu or '❌' in g.firma_odeme_durumu %}
+                                {% set is_vakif = '🏛️' in g.tahsilat_durumu %}
+                                
+                                {% if is_vakif %}
+                                    {% set border_renk = "border-l-[6px] border-blue-500 bg-blue-50/20" %}
+                                    {% set badge = "<span class='bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg border border-blue-200 text-[9px] font-black whitespace-nowrap'>🔵 TAHSİLAT BEKLİYOR (VAKIF)</span>" %}
+                                {% elif not is_t_ok %}
+                                    {% set border_renk = "border-l-[6px] border-rose-500 bg-rose-50/20" %}
+                                    {% set badge = "<span class='bg-rose-100 text-rose-700 px-3 py-1.5 rounded-lg border border-rose-200 text-[9px] font-black whitespace-nowrap'>🔴 TAHSİLAT BEKLİYOR</span>" %}
+                                {% elif is_t_ok and not is_f_ok %}
+                                    {% set border_renk = "border-l-[6px] border-amber-400 bg-amber-50/20" %}
+                                    {% set badge = "<span class='bg-amber-100 text-amber-700 px-3 py-1.5 rounded-lg border border-amber-200 text-[9px] font-black whitespace-nowrap'>🟡 FİRMA HAK EDİŞİ BEKLİYOR</span>" %}
+                                {% else %}
+                                    {% set border_renk = "border-l-[6px] border-emerald-500 bg-emerald-50/20" %}
+                                    {% set badge = "<span class='bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-lg border border-emerald-200 text-[9px] font-black whitespace-nowrap'>🟢 TAMAMLANDI</span>" %}
+                                {% endif %}
+
+                                <tr class="hover:bg-slate-50/80 transition {{ border_renk }}">
                                     <td class="p-5 font-bold text-slate-500 text-xs">{{ g.tarih }}</td>
                                     <td class="p-5"><span class="bg-slate-100 border border-slate-200 text-slate-600 px-2 py-1 rounded text-[9px] font-black uppercase whitespace-nowrap">{{ g.kampus }}</span></td>
                                     <td class="p-5 font-black text-slate-800 text-xs">{{ g.adi }}</td>
                                     <td class="p-5 text-center font-black text-xs">{{ g.kisi_sayisi }}</td>
                                     <td class="p-5 text-center text-indigo-600 font-black text-xs whitespace-nowrap">{{ g.tarife }}</td>
+                                    
+                                    <td class="p-5 text-center whitespace-nowrap">{{ badge|safe }}</td>
+                                    
                                     <td class="p-5 text-right font-black text-slate-800 text-xs whitespace-nowrap">{{ "%.2f"|format(g.toplam_tutar) }} ₺</td>
                                     <td class="px-6 py-4 text-center">
                                         {% if g.dekont_yolu %}
@@ -537,13 +598,13 @@
                                 </tr>
                                 {% set toplam_aylik.value = toplam_aylik.value + g.toplam_tutar %}
                                 {% else %}
-                                <tr><td colspan="7" class="p-10 text-center text-slate-400 font-bold italic text-xs uppercase tracking-widest">Seçilen kriterlere uygun kayıt bulunamadı.</td></tr>
+                                <tr><td colspan="8" class="p-10 text-center text-slate-400 font-bold italic text-xs uppercase tracking-widest">Seçilen kriterlere uygun kayıt bulunamadı.</td></tr>
                                 {% endfor %}
                             </tbody>
                             <tfoot class="bg-slate-800 text-white">
                                 <tr>
-                                    <td colspan="5" class="p-5 text-right font-black text-slate-400 uppercase tracking-widest text-xs">Filtrelenmiş Toplam Ciro:</td>
-                                    <td class="p-5 text-right font-black text-white text-xl">{{ "%.2f"|format(toplam_aylik.value) }} ₺</td>
+                                    <td colspan="6" class="p-5 text-right font-black text-slate-400 uppercase tracking-widest text-xs">Filtrelenmiş Toplam Ciro:</td>
+                                    <td class="p-5 text-right font-black text-emerald-400 text-xl">{{ "%.2f"|format(toplam_aylik.value) }} ₺</td>
                                     <td class="p-5 text-center"></td>
                                 </tr>
                             </tfoot>
