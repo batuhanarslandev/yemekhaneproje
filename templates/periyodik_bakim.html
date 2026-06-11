@@ -11,6 +11,58 @@
         .custom-scrollbar:hover::-webkit-scrollbar-thumb { background: #94a3b8; }
         @media (max-width: 768px) { #main-content-area { margin-left: 0 !important; } }
     </style>
+    <script>
+        // 🔍 GET FİLTRELERİ İÇİN SESSİZ MOTOR (Ay ve Yıl Değişince Sayfa Yenilenmez)
+        async function filtreleSessiz(inputEl) {
+            const form = inputEl.form;
+            const url = new URL(form.action, window.location.origin);
+            const yil = form.querySelector('[name="yil"]').value;
+            const ay = form.querySelector('[name="ay"]').value;
+            
+            url.searchParams.set('yil', yil);
+            url.searchParams.set('ay', ay);
+            
+            try {
+                const response = await fetch(url);
+                const html = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                
+                // Sadece içerik alanını pürüzsüzce günceller ve URL'i değiştirir
+                document.getElementById('main-content-area').innerHTML = doc.getElementById('main-content-area').innerHTML;
+                window.history.pushState({}, '', url);
+            } catch (error) {
+                console.error("Filtreleme hatası:", error);
+            }
+        }
+
+        // 🚀 POST İŞLEMLERİ İÇİN SESSİZ MOTOR (Evrak Onaylama, Silme, Ekleme)
+        async function sessizGonder(event, form, confirmMsg = null) {
+            event.preventDefault();
+            
+            if (confirmMsg && !confirm(confirmMsg)) {
+                return false;
+            }
+
+            try {
+                const scrollY = window.scrollY;
+                const response = await fetch(form.action, {
+                    method: form.method,
+                    body: new FormData(form)
+                });
+                
+                const html = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                
+                document.getElementById('main-content-area').innerHTML = doc.getElementById('main-content-area').innerHTML;
+                window.scrollTo(0, scrollY); // Kullanıcının kaldığı dikey hizayı korur
+            } catch (error) {
+                console.error("İşlem hatası:", error);
+                alert("İşlem gerçekleştirilirken bir hata oluştu!");
+            }
+        }
+    </script>
 </head>
 <body class="bg-slate-50 flex min-h-screen font-sans text-slate-800 overflow-x-hidden">
 
@@ -27,10 +79,9 @@
                 <p class="text-slate-500 font-medium mt-2 text-sm">Mutfak ekipmanlarının bakımlarını onaylayın ve yıllık matristen tesisi izleyin.</p>
             </div>
             
-            <!-- AY SEÇİCİ -->
-            <form action="/periyodik-bakim" method="GET" class="flex flex-wrap sm:flex-nowrap gap-2 bg-white p-2 rounded-2xl shadow-sm border border-slate-200 w-full md:w-auto">
-                <input type="number" name="yil" value="{{ secilen_yil }}" class="w-full sm:w-24 border border-slate-200 rounded-xl p-2.5 font-bold text-sm outline-none bg-slate-50 text-center focus:border-indigo-400 transition" onchange="this.form.submit()">
-                <select name="ay" class="w-full sm:w-40 border border-slate-200 rounded-xl p-2.5 font-bold text-sm outline-none bg-slate-50 text-indigo-700 focus:border-indigo-400 cursor-pointer transition" onchange="this.form.submit()">
+            <form action="/periyodik-bakim" method="GET" class="flex flex-wrap sm:flex-nowrap gap-2 bg-white p-2 rounded-2xl shadow-sm border border-slate-200 w-full md:w-auto" onsubmit="event.preventDefault();">
+                <input type="number" name="yil" value="{{ secilen_yil }}" class="w-full sm:w-24 border border-slate-200 rounded-xl p-2.5 font-bold text-sm outline-none bg-slate-50 text-center focus:border-indigo-400 transition" onchange="filtreleSessiz(this)">
+                <select name="ay" class="w-full sm:w-40 border border-slate-200 rounded-xl p-2.5 font-bold text-sm outline-none bg-slate-50 text-indigo-700 focus:border-indigo-400 cursor-pointer transition" onchange="filtreleSessiz(this)">
                     {% for ay_no, ay_isim in ay_isimleri.items() %}
                         <option value="{{ ay_no }}" {% if secilen_ay == ay_no %}selected{% endif %}>{{ ay_isim }} Ayı</option>
                     {% endfor %}
@@ -51,7 +102,6 @@
 
         <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-10">
             
-            <!-- SOL: SEÇİLİ AY KONTROL PANELİ -->
             <div class="xl:col-span-2 space-y-4">
                 <h2 class="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2 mb-2">
                     📅 {{ ay_isimleri[secilen_ay] }} Ayı Bakım İşlemleri
@@ -79,17 +129,35 @@
                         
                         <div class="mt-auto">
                             {% if ab.durum == 'Yapıldı' %}
-                                <form action="/periyodik-bakim" method="POST" class="m-0 flex items-center justify-between gap-2 w-full">
-                                    <span class="bg-emerald-50 border border-emerald-100 text-emerald-600 font-black px-2 py-1.5 rounded-lg text-[9px] uppercase tracking-widest text-center flex-1">Tamamlandı</span>
-                                    <input type="hidden" name="islem_tipi" value="bakim_geri_al"><input type="hidden" name="bakim_id" value="{{ ab.id }}"><input type="hidden" name="yil" value="{{ secilen_yil }}"><input type="hidden" name="ay" value="{{ secilen_ay }}">
-                                    <button type="submit" class="bg-white border border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50 font-bold p-1.5 rounded-lg transition shadow-sm shrink-0" title="Geri Al / İptal Et">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                                    </button>
+                                <form action="/periyodik-bakim" method="POST" class="m-0 flex flex-col gap-2 w-full" onsubmit="return sessizGonder(event, this);">
+                                    <div class="flex items-center justify-between gap-2 w-full">
+                                        <span class="bg-emerald-50 border border-emerald-100 text-emerald-600 font-black px-2 py-1.5 rounded-lg text-[9px] uppercase tracking-widest text-center flex-1">
+                                            Tamamlandı ({{ secilen_ay }}. Ay)
+                                        </span>
+                                        <input type="hidden" name="islem_tipi" value="bakim_geri_al">
+                                        <input type="hidden" name="bakim_id" value="{{ ab.id }}">
+                                        <input type="hidden" name="yil" value="{{ secilen_yil }}">
+                                        <input type="hidden" name="ay" value="{{ secilen_ay }}">
+                                        <input type="hidden" name="islem_ay" value="{{ secilen_ay }}">
+                                        <button type="submit" class="bg-white border border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50 font-bold p-1.5 rounded-lg transition shadow-sm shrink-0" title="Geri Al / İptal Et">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                                        </button>
+                                    </div>
                                 </form>
                             {% else %}
-                                <form action="/periyodik-bakim" method="POST" class="m-0 w-full">
-                                    <input type="hidden" name="islem_tipi" value="bakim_yapildi"><input type="hidden" name="bakim_id" value="{{ ab.id }}"><input type="hidden" name="yil" value="{{ secilen_yil }}"><input type="hidden" name="ay" value="{{ secilen_ay }}">
-                                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-2 rounded-lg transition shadow-sm text-[9px] uppercase tracking-widest">Evrak Alındı (Onayla)</button>
+                                <form action="/periyodik-bakim" method="POST" class="m-0 w-full flex gap-2" onsubmit="return sessizGonder(event, this);">
+                                    <input type="hidden" name="islem_tipi" value="bakim_yapildi">
+                                    <input type="hidden" name="bakim_id" value="{{ ab.id }}">
+                                    <input type="hidden" name="yil" value="{{ secilen_yil }}">
+                                    <input type="hidden" name="ay" value="{{ secilen_ay }}">
+                                    
+                                    <select name="islem_ay" required class="border border-indigo-200 bg-indigo-50 text-indigo-700 font-bold text-[10px] p-2 rounded-lg outline-none focus:border-indigo-400 cursor-pointer shadow-sm w-20 shrink-0">
+                                        {% for i in range(1, 13) %}
+                                            <option value="{{ i }}" {% if i|string == secilen_ay %}selected{% endif %}>{{ i }}. Ay</option>
+                                        {% endfor %}
+                                    </select>
+
+                                    <button type="submit" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-2 rounded-lg transition shadow-sm text-[9px] uppercase tracking-widest whitespace-nowrap">Evrak Alındı</button>
                                 </form>
                             {% endif %}
                         </div>
@@ -103,10 +171,9 @@
                 </div>
             </div>
 
-            <!-- SAĞ: YENİ CİHAZ EKLEME FORMU -->
             <div class="xl:col-span-1 bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 h-max">
                 <h3 class="text-sm font-black text-slate-800 mb-6 uppercase tracking-widest flex items-center gap-2">➕ Yeni Cihaz Planı</h3>
-                <form action="/periyodik-bakim" method="POST" class="space-y-5">
+                <form action="/periyodik-bakim" method="POST" class="space-y-5" onsubmit="return sessizGonder(event, this);">
                     <input type="hidden" name="islem_tipi" value="bakim_ekle">
                     <input type="hidden" name="ay" value="{{ secilen_ay }}">
                     <input type="hidden" name="yil" value="{{ secilen_yil }}">
@@ -132,15 +199,16 @@
             </div>
         </div>
 
-        <!-- ========================================== -->
-        <!-- YILLIK DEV MATRİS TABLOSU -->
-        <!-- ========================================== -->
         <div class="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 mt-8">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                 <div>
                     <h3 class="text-xl font-black text-slate-800 mb-1 flex items-center gap-2">📊 Yıllık Bakım Matrisi ({{ secilen_yil }})</h3>
                     <p class="text-slate-500 font-medium text-xs">Tüm tesisin yıllık bakım röntgeni. Durum ikonlarının üzerine gelerek detayları görebilirsiniz.</p>
                 </div>
+                
+                <a href="/periyodik-bakim/rapor?yil={{ secilen_yil }}&ay={{ secilen_ay }}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-6 py-3 rounded-xl text-xs uppercase tracking-widest shadow-md transition flex items-center gap-2 shrink-0">
+                    <span class="text-lg">🖨️</span> {{ secilen_ay }}. Ay Bakım Raporunu Al
+                </a>
             </div>
             
             <div class="overflow-x-auto custom-scrollbar border border-slate-200 rounded-xl shadow-sm">
@@ -173,7 +241,7 @@
                             {% endfor %}
                             
                             <td class="py-2 px-4 text-center border-l border-slate-100">
-                                <form action="/periyodik-bakim" method="POST" class="m-0 inline-block" onsubmit="return confirm('Bu cihazı ve tüm geçmiş loglarını silmek istediğinize emin misiniz?');">
+                                <form action="/periyodik-bakim" method="POST" class="m-0 inline-block" onsubmit="return sessizGonder(event, this, 'Bu cihazı ve tüm geçmiş loglarını silmek istediğinize emin misiniz?');">
                                     <input type="hidden" name="islem_tipi" value="bakim_sil"><input type="hidden" name="bakim_id" value="{{ b.id }}"><input type="hidden" name="yil" value="{{ secilen_yil }}"><input type="hidden" name="ay" value="{{ secilen_ay }}">
                                     <button type="submit" class="text-slate-300 hover:text-rose-500 hover:bg-rose-50 p-1 rounded transition" title="Cihazı Sil">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
@@ -188,7 +256,6 @@
                 </table>
             </div>
             
-            <!-- LEJANT -->
             <div class="mt-6 flex flex-wrap gap-4 text-[9px] font-black uppercase tracking-widest text-slate-400 justify-end bg-slate-50 p-3 rounded-xl border border-slate-100">
                 <span class="flex items-center gap-1.5"><div class="w-2 h-2 bg-slate-300 rounded-full"></div> Bakım Yok</span>
                 <span class="flex items-center gap-1.5"><div class="w-4 h-4 bg-rose-50 text-rose-500 border border-rose-200 rounded-full flex items-center justify-center">!</div> Bekliyor / Gecikmiş</span>

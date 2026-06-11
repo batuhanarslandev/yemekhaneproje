@@ -1,15 +1,23 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+print("APP BASLADI")
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file
 from functools import wraps
 import sqlite3
 import os
 import re
+import io
+import math
 from datetime import date, datetime, timedelta
 import pandas as pd
 from werkzeug.utils import secure_filename
+
+# 📊 Excel Raporlama Kütüphaneleri
+import openpyxl
+from openpyxl.styles import Font, Alignment, Border, Side
+from openpyxl.worksheet.pagebreak import Break
+
 app = Flask(__name__)
 app.secret_key = "yemekhane_gizli_anahtar_2026"
 app.config['TEMPLATES_AUTO_RELOAD'] = True
-
 # --- EKRAN İÇİN TÜRKÇE TARİH ÇEVİRMENİ ---
 @app.template_filter('tarih_tr')
 def tarih_tr_format(deger):
@@ -124,7 +132,8 @@ def inject_notifications():
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'kullanici_id' not in session: return redirect(url_for('login'))
+        if 'kullanici' not in session:
+            return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -156,7 +165,7 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS kullanicilar (id INTEGER PRIMARY KEY AUTOINCREMENT, kullanici_adi TEXT UNIQUE, sifre TEXT, rol TEXT, isim TEXT)''')
     kullanicilar = c.execute("SELECT * FROM kullanicilar").fetchall()
     if not kullanicilar:
-        c.execute("INSERT INTO kullanicilar (kullanici_adi, sifre, rol, isim) VALUES ('diyetisyen', '1234', 'admin', 'Diyetisyen (Yönetici)')")
+        c.execute("INSERT INTO kullanicilar (kullanici_adi, sifre, rol, isim) VALUES ('batuhan', '1234', 'admin', 'Diyetisyen (Yönetici)')")
         c.execute("INSERT INTO kullanicilar (kullanici_adi, sifre, rol, isim) VALUES ('tekniker', '1234', 'admin', 'Gıda Teknikeri')")
         c.execute("INSERT INTO kullanicilar (kullanici_adi, sifre, rol, isim) VALUES ('depocu', '1234', 'depocu', 'Depo Sorumlusu')")
         c.execute('''CREATE TABLE IF NOT EXISTS okunan_bildirimler (id INTEGER PRIMARY KEY AUTOINCREMENT, kullanici_id INTEGER, bildirim_turu TEXT, referans_id TEXT, islem_tarihi DATE)''')
@@ -271,19 +280,43 @@ def bildirim_oku():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        conn = get_db_connection()
-        user = conn.execute("SELECT * FROM kullanicilar WHERE kullanici_adi=? AND sifre=?", (request.form['kullanici_adi'], request.form['sifre'])).fetchone()
-        conn.close()
-        if user:
-            session['kullanici_id'] = user['id']; session['kullanici_adi'] = user['kullanici_adi']; session['rol'] = user['rol']; session['isim'] = user['isim']
-            flash(f"Hoş geldin, {user['isim']}!", "success")
-            return redirect(url_for('index'))
-        flash("Hatalı giriş!", "error")
+        print("FORM:", request.form)
+
+        kullanici_adi = request.form.get('kullanici_adi', '').strip().lower()
+        sifre = request.form.get('sifre', '').strip()
+
+        print("Kullanıcı:", kullanici_adi)
+        print("Şifre:", sifre)
+        kullanici_adi = request.form.get('kullanici_adi', '').strip().lower()
+        sifre = request.form.get('sifre')
+        
+        # Senin tanımladığın kullanıcı sözlüğü
+        kullanicilar = {
+            "batuhan": {"sifre": "1234", "isim": "Batuhan M. Arslan", "rol": "admin"},
+            "ebru": {"sifre": "1234", "isim": "Ebru İlğen", "rol": "admin"},
+            "depocu": {"sifre": "1234", "isim": "Depo Sorumlusu", "rol": "depocu"}
+        }
+        
+        # Kontrol aşaması
+        if kullanici_adi in kullanicilar:
+            if kullanicilar[kullanici_adi]['sifre'] == sifre:
+                # Giriş başarılı
+                session['kullanici'] = kullanici_adi
+                session['isim'] = kullanicilar[kullanici_adi]['isim']
+                session['rol'] = kullanicilar[kullanici_adi]['rol']
+                flash(f"Hoş geldin, {session['isim']}!", "success")
+                return redirect(url_for('index')) # Veya ana sayfan neyse
+            else:
+                flash("Hatalı şifre!", "error")
+        else:
+            flash("Böyle bir kullanıcı bulunamadı!", "error")
+            
     return render_template('login.html')
 
 @app.route('/logout')
 def logout():
-    session.clear(); flash("Çıkış yapıldı.", "success"); return redirect(url_for('login'))
+    session.clear()
+    return redirect(url_for('login'))
 
 @app.route('/')
 @login_required
@@ -606,6 +639,140 @@ def mal_kabul():
 
     conn.close()
     return render_template('mal_kabul.html', loglar=loglar, red_loglar=red_loglar, bekleyenler=bekleyenler, secilen_ay=secilen_ay, depo_urunleri=depo_urunleri)
+
+@app.route('/mal-kabul/dokum', methods=['GET'])
+@login_required
+def mal_kabul_dokum():
+    from datetime import date
+    secilen_ay = request.args.get('ay', date.today().strftime('%Y-%m'))
+    
+    conn = get_db_connection()
+    veriler = conn.execute("SELECT tarih, tedarikci, urun_adi, miktar, birim, skt, lot_damga_no, onay_durumu, kabul_eden FROM mal_kabul_log WHERE tarih LIKE ? ORDER BY tarih ASC", (f"{secilen_ay}%",)).fetchall()
+    conn.close()
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "FR-1329 Mal Kabul"
+
+    # Stiller (Yukarıdaki ana kütüphanelerden beslenir)
+    bold_font = Font(bold=True)
+    imza_font = Font(size=10, bold=True, color="1F2937")
+    
+    center_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    shrink_align = Alignment(horizontal='center', vertical='center', wrap_text=True, shrink_to_fit=True)
+    thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+
+    headers = ["TARİH", "FİRMA ADI", "ÜRÜN ADI", "MİKTAR", "S.K.T", "PARTİ NO / Seri No", "RED/KABUL", "FATURA / İRSALİYE NO", "İMZA"]
+
+    satir_per_sayfa = 22
+    toplam_veri = len(veriler)
+    toplam_sayfa = math.ceil(toplam_veri / satir_per_sayfa) if toplam_veri > 0 else 1
+
+    current_row = 1
+
+    for page in range(toplam_sayfa):
+        # 1. BAŞLIK SATIRI
+        for col_num, header_text in enumerate(headers, 1):
+            c = ws.cell(row=current_row, column=col_num)
+            c.value = header_text
+            c.font = bold_font
+            c.alignment = center_align
+            c.border = thin_border
+        ws.row_dimensions[current_row].height = 30
+        current_row += 1
+
+        # 2. VERİ SATIRLARI
+        start_idx = page * satir_per_sayfa
+        end_idx = start_idx + satir_per_sayfa
+        page_data = veriler[start_idx:end_idx]
+
+        for v in page_data:
+            tarih = v['tarih'][:10] if v['tarih'] else ""
+            firma = v['tedarikci'] if v['tedarikci'] else "-"
+            urun = v['urun_adi'] if v['urun_adi'] else ""
+            miktar_str = f"{int(v['miktar']) if v['miktar'] % 1 == 0 else v['miktar']} {v['birim']}"
+            skt = v['skt'] if v['skt'] else "-"
+            parti = v['lot_damga_no'] if v['lot_damga_no'] else "-"
+            
+            if v['onay_durumu'] in ['Onaylandı', 'Şartlı Kabul']:
+                durum = "KABUL"
+            elif 'Red' in v['onay_durumu']:
+                durum = "RED"
+            else:
+                durum = "BEKLİYOR"
+                
+            # AKILLI DİNAMİK İMZA MOTORU
+            log_yapan = str(v['kabul_eden']).lower() if v['kabul_eden'] else ""
+            
+            if "batuhan" in log_yapan or "diyetisyen" in log_yapan or "admin" in log_yapan:
+                imza = "Batuhan M. Arslan"
+            elif "ebru" in log_yapan or "ilğen" in log_yapan or "ilgen" in log_yapan or "tekniker" in log_yapan:
+                imza = "Ebru İlğen"
+            else:
+                imza = v['kabul_eden'] if v['kabul_eden'] else ""
+            
+            row_data = [tarih, firma, urun, miktar_str, skt, parti, durum, "", imza]
+            
+            for col_idx, val in enumerate(row_data, 1):
+                c = ws.cell(row=current_row, column=col_idx)
+                c.value = val
+                c.border = thin_border
+                
+                if col_idx in [2, 3, 6, 9]:
+                    c.alignment = shrink_align
+                else:
+                    c.alignment = center_align
+                
+                if col_idx == 9:
+                    c.font = imza_font
+                    
+            ws.row_dimensions[current_row].height = 25
+            current_row += 1
+
+        # 3. BOŞ SATIR TAMAMLAMA
+        yazilan_satir = len(page_data)
+        for _ in range(satir_per_sayfa - yazilan_satir):
+            for col_idx in range(1, 10):
+                c = ws.cell(row=current_row, column=col_idx)
+                c.border = thin_border
+            ws.row_dimensions[current_row].height = 25
+            current_row += 1
+
+        # 4. ALT BİLGİ VE SAYFA KESMESİ
+        ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=9)
+        fc = ws.cell(row=current_row, column=1)
+        fc.value = "Doküman No: FR-1329; Revizyon Tarihi: 04.09.2025; revizyon No:01"
+        fc.font = Font(italic=True, size=9, color="555555")
+        fc.alignment = Alignment(horizontal='left', vertical='center')
+        ws.row_dimensions[current_row].height = 20
+        
+        ws.row_breaks.append(Break(id=current_row))
+        current_row += 1
+
+    # 5. SÜTUN GENİŞLİKLERİ VE YAZDIRMA AYARLARI
+    ws.column_dimensions['A'].width = 12
+    ws.column_dimensions['B'].width = 24
+    ws.column_dimensions['C'].width = 22
+    ws.column_dimensions['D'].width = 12
+    ws.column_dimensions['E'].width = 12
+    ws.column_dimensions['F'].width = 20
+    ws.column_dimensions['G'].width = 12
+    ws.column_dimensions['H'].width = 18
+    ws.column_dimensions['I'].width = 18
+
+    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0 
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    dosya_adi = f"FR-1329_Mal_Kabul_{secilen_ay}.xlsx"
+    return send_file(output, download_name=dosya_adi, as_attachment=True, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
 @app.route('/depo', methods=['GET', 'POST'])
 @login_required
 def depo():
@@ -2002,13 +2169,17 @@ def periyodik_bakim():
             flash("Bakım kaydı tamamen silindi.", "success")
 
         elif islem == 'bakim_yapildi':
-            conn.execute("INSERT INTO periyodik_bakim_log (bakim_id, yil, ay) VALUES (?,?,?)", (request.form['bakim_id'], request.form['yil'], request.form['ay'])); conn.commit()
-            flash("Bakım evrakı alındı ve sisteme işlendi.", "success")
+            # islem_ay parametresi, kullanıcının seçtiği "Bu bakım hangi aya ait?" bilgisini taşır
+            islem_ay = request.form.get('islem_ay', request.form['ay'])
+            conn.execute("INSERT INTO periyodik_bakim_log (bakim_id, yil, ay) VALUES (?,?,?)", (request.form['bakim_id'], request.form['yil'], islem_ay))
+            conn.commit()
+            flash(f"Bakım evrakı ({islem_ay}. Ay için) alındı ve sisteme işlendi.", "success")
 
         elif islem == 'bakim_geri_al':
-            conn.execute("DELETE FROM periyodik_bakim_log WHERE bakim_id=? AND yil=? AND ay=?", (request.form['bakim_id'], request.form['yil'], request.form['ay'])); conn.commit()
+            islem_ay = request.form.get('islem_ay', request.form['ay'])
+            conn.execute("DELETE FROM periyodik_bakim_log WHERE bakim_id=? AND yil=? AND ay=?", (request.form['bakim_id'], request.form['yil'], islem_ay))
+            conn.commit()
             flash("İşlem geri alındı.", "success")
-
         return redirect(url_for('periyodik_bakim', ay=request.form.get('ay', secilen_ay), yil=request.form.get('yil', secilen_yil)))
 
     bakimlar = conn.execute("SELECT * FROM periyodik_bakim ORDER BY id ASC").fetchall()
@@ -2037,6 +2208,176 @@ def periyodik_bakim():
     ay_isimleri = { '1': 'Ocak', '2': 'Şubat', '3': 'Mart', '4': 'Nisan', '5': 'Mayıs', '6': 'Haziran', '7': 'Temmuz', '8': 'Ağustos', '9': 'Eylül', '10': 'Ekim', '11': 'Kasım', '12': 'Aralık' }
 
     return render_template('periyodik_bakim.html', bakimlar=bakimlar, aylik_bakimlar=aylik_bakimlar, matris=matris, ay_isimleri=ay_isimleri, secilen_ay=secilen_ay, secilen_yil=secilen_yil)
+
+@app.route('/periyodik-bakim/rapor', methods=['GET'])
+@login_required
+@admin_required
+def periyodik_bakim_rapor():
+    import io
+    import math
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from openpyxl.worksheet.pagebreak import Break
+    from datetime import date
+
+    secilen_yil = request.args.get('yil', date.today().strftime('%Y'))
+    secilen_ay = int(request.args.get('ay', date.today().strftime('%m')))
+    
+    conn = get_db_connection()
+    bakimlar = conn.execute("SELECT * FROM periyodik_bakim ORDER BY id ASC").fetchall()
+    logs = conn.execute("SELECT * FROM periyodik_bakim_log WHERE yil = ?", (secilen_yil,)).fetchall()
+    conn.close()
+
+    log_dict = {(str(l['bakim_id']), str(l['ay'])): True for l in logs}
+
+    # 📊 Excel Çizim Motoru Başlıyor
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"{secilen_ay}. Ay Bakım Matrisi"
+    ws.views.sheetView[0].showGridLines = True
+
+    # Stiller
+    font_title = Font(name="Arial", size=14, bold=True, color="FFFFFF")
+    font_header = Font(name="Arial", size=9, bold=True, color="FFFFFF")
+    font_data = Font(name="Arial", size=10, bold=False, color="000000")
+    font_x = Font(name="Arial", size=11, bold=True, color="16A34A") # Yeşil X
+    font_alert = Font(name="Arial", size=11, bold=True, color="DC2626") # Kırmızı !
+
+    fill_title = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+    fill_header = PatternFill(start_color="334155", end_color="334155", fill_type="solid")
+    fill_zebra = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+    fill_x = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
+    fill_alert = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+
+    center_align = Alignment(horizontal='center', vertical='center')
+    left_align = Alignment(horizontal='left', vertical='center', wrap_text=True, shrink_to_fit=True)
+    thin_side = Side(style='thin', color="CBD5E1")
+    border_all = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+
+    # Bütün Aylar Geri Döndü (Tam 12 Ay Şablonu)
+    aylar_tam_liste = ["OCA", "ŞUB", "MAR", "NİS", "MAY", "HAZ", "TEM", "AĞU", "EYL", "EKİ", "KAS", "ARA"]
+    headers = ["NO", "CİHAZ / EKİPMAN ADI"] + aylar_tam_liste
+    toplam_sutun = 14 
+
+    satir_per_sayfa = 20
+    toplam_sayfa = math.ceil(len(bakimlar) / satir_per_sayfa) if len(bakimlar) > 0 else 1
+
+    current_row = 1
+
+    for page in range(toplam_sayfa):
+        # 1. Başlık Bannerı
+        ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=toplam_sutun)
+        title_cell = ws.cell(row=current_row, column=1)
+        ay_ismi = aylar_tam_liste[secilen_ay-1]
+        title_cell.value = f"YILDIZ TEKNİK ÜNİVERSİTESİ - {secilen_yil} YILI {secilen_ay}. AY ({ay_ismi}) BAKIM MATRİSİ"
+        title_cell.font = font_title
+        title_cell.fill = fill_title
+        title_cell.alignment = center_align
+        ws.row_dimensions[current_row].height = 35
+        current_row += 1
+        
+        # 2. Sütun Başlıkları
+        for col_idx, text in enumerate(headers, 1):
+            c = ws.cell(row=current_row, column=col_idx)
+            c.value = text
+            c.font = font_header
+            c.fill = fill_header
+            c.alignment = center_align
+            c.border = border_all
+        ws.row_dimensions[current_row].height = 25
+        current_row += 1
+        
+        start_idx = page * satir_per_sayfa
+        end_idx = start_idx + satir_per_sayfa
+        page_data = bakimlar[start_idx:end_idx]
+        
+        for idx, b in enumerate(page_data, start_idx + 1):
+            c_no = ws.cell(row=current_row, column=1, value=idx)
+            c_no.font = font_data
+            c_no.alignment = center_align
+            c_no.border = border_all
+            
+            c_name = ws.cell(row=current_row, column=2, value=b['ekipman_adi'])
+            c_name.font = font_data
+            c_name.alignment = left_align
+            c_name.border = border_all
+            
+            gerekli_aylar = b['bakim_aylari'].split(',') if b['bakim_aylari'] else []
+            
+            # 3. YENİ MANTIK: Gelecek aylar boş bırakılır
+            for ay_no in range(1, 13):
+                col_m = ay_no + 2
+                c_m = ws.cell(row=current_row, column=col_m)
+                c_m.border = border_all
+                c_m.alignment = center_align
+                
+                a_str = str(ay_no)
+                if a_str in gerekli_aylar:
+                    # Sadece seçilen aya kadar olan kısımları değerlendir
+                    if ay_no <= secilen_ay:
+                        if (str(b['id']), a_str) in log_dict:
+                            c_m.value = "X"
+                            c_m.font = font_x
+                            c_m.fill = fill_x
+                        else:
+                            c_m.value = "!"
+                            c_m.font = font_alert
+                            c_m.fill = fill_alert
+                    else:
+                        # Seçilen aydan sonrası boş kalsın (Henüz yaşanmadı)
+                        c_m.value = ""
+                else:
+                    c_m.value = "" 
+                    
+            if current_row % 2 == 0:
+                for col in range(1, toplam_sutun + 1):
+                    if ws.cell(row=current_row, column=col).value == "":
+                        ws.cell(row=current_row, column=col).fill = fill_zebra
+                        
+            ws.row_dimensions[current_row].height = 22
+            current_row += 1
+            
+        # 4. Boş Satır Tamamlama
+        yazilan = len(page_data)
+        for _ in range(satir_per_sayfa - yazilan):
+            ws.cell(row=current_row, column=1).value = ""
+            for col in range(1, toplam_sutun + 1):
+                c = ws.cell(row=current_row, column=col)
+                c.border = border_all
+                if current_row % 2 == 0:
+                    c.fill = fill_zebra
+            ws.row_dimensions[current_row].height = 22
+            current_row += 1
+            
+        # 5. Sayfa Sonu Kalite Kodu
+        ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=toplam_sutun)
+        fc = ws.cell(row=current_row, column=1)
+        fc.value = "Doküman No: FR-1330; Revizyon Tarihi: 10.06.2026; Revizyon No: 01"
+        fc.font = Font(name="Arial", size=9, italic=True, color="555555")
+        fc.alignment = Alignment(horizontal='left', vertical='center')
+        ws.row_dimensions[current_row].height = 20
+        
+        ws.row_breaks.append(Break(id=current_row))
+        current_row += 1
+
+    # Sütun Genişlikleri Yeniden 12 Aya Göre Ayarlandı
+    ws.column_dimensions['A'].width = 6   
+    ws.column_dimensions['B'].width = 30  
+    for m in range(3, 15):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(m)].width = 7 
+
+    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    dosya_adi = f"FR-1330_Bakim_Matrisi_{secilen_yil}_{secilen_ay}.Ay.xlsx"
+    return send_file(output, download_name=dosya_adi, as_attachment=True, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 @app.route('/raporlar')
 @login_required
@@ -2466,3 +2807,6 @@ def personel_import():
         flash(f"Hata: {str(e)}", "error")
 
     return redirect(url_for('personel'))
+
+if __name__ == "__main__":
+    app.run(debug=True)
